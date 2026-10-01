@@ -101,6 +101,7 @@
     timer = setTimeout(function () {
       state = 'go';
       goAt = performance.now();
+      BB.sfx.start();
       setPad('go', 'Click!', '');
     }, 1200 + Math.random() * 3200);
   }
@@ -117,6 +118,7 @@
     if (state !== 'go') return;
 
     var ms = Math.round(performance.now() - goAt);
+    BB.sfx.good();
     times.push(ms);
     paintTrials();
     BB.setStat('st-last', ms + ' ms');

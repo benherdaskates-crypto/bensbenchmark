@@ -267,7 +267,7 @@
     e.preventDefault();
     if (!running) start();
     keystrokes++;
-    if (words[wi][ci] !== k) errors++;
+    if (words[wi][ci] !== k) { errors++; BB.sfx.bad(); } else BB.sfx.type();
     typed[wi] = (typed[wi] || '') + k;
     ci++;
     render();

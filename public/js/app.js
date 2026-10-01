@@ -52,10 +52,13 @@
     const t = d || new Date();
     return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
   };
+  // Puzzle #1 is 30 September 2026, the day the site opened.
+  BB.PUZZLE_EPOCH = [2026, 8, 30];   // month is zero-based: 8 = September
   BB.puzzleNumber = function () {
-    const start = new Date(2025, 0, 1);
+    const start = new Date(BB.PUZZLE_EPOCH[0], BB.PUZZLE_EPOCH[1], BB.PUZZLE_EPOCH[2]);
     const now = new Date();
-    return Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - start) / 864e5) + 1;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((today - start) / 864e5) + 1;
   };
   BB.msUntilTomorrow = function () {
     const n = new Date();
@@ -157,6 +160,17 @@
     }
   };
 
+  /* One place that records a Wordle result, so solo and friend games
+     move the same streak and feed the same leaderboard. */
+  BB.recordWordle = async function (won, meta) {
+    const store = lsGet('bb_wordle', { streak: 0, played: 0, won: 0 });
+    store.played++;
+    if (won) { store.won++; store.streak++; } else { store.streak = 0; }
+    lsSet('bb_wordle', store);
+    const res = won ? await BB.submitScore('wordle', store.streak, meta) : { newBest: false };
+    return { store, res };
+  };
+
   BB.bestFor = function (game) {
     if (BB.user && BB.user.best && BB.user.best[game] !== undefined) return BB.user.best[game];
     return BB.localBest(game);
@@ -177,6 +191,79 @@
   BB.toggleTheme = function () {
     BB.applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
   };
+
+  /* ---------- Sound ----------
+     Tones are generated, so there are no audio files to load or host.
+     Browsers only allow audio after a gesture, so the context starts on
+     the first click or key press. */
+  const SOUND_KEY = 'bb_sound';
+  let ctx = null;
+  let soundOn = lsGet(SOUND_KEY, true) !== false;
+
+  function audio() {
+    if (!soundOn) return null;
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try { ctx = new AC(); } catch (e) { return null; }
+    }
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    return ctx;
+  }
+
+  // one short blip
+  function blip(freq, dur, type, gain, slideTo) {
+    const c = audio();
+    if (!c) return;
+    const osc = c.createOscillator();
+    const amp = c.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, c.currentTime);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, c.currentTime + dur);
+    // quick attack, smooth tail, so nothing clicks or pops
+    amp.gain.setValueAtTime(0.0001, c.currentTime);
+    amp.gain.exponentialRampToValueAtTime(gain || 0.06, c.currentTime + 0.008);
+    amp.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+    osc.connect(amp); amp.connect(c.destination);
+    osc.start();
+    osc.stop(c.currentTime + dur + 0.02);
+  }
+  function chord(freqs, dur, gain) {
+    freqs.forEach((f, i) => setTimeout(() => blip(f, dur, 'triangle', gain || 0.05), i * 70));
+  }
+
+  BB.sfx = {
+    click:  () => blip(520, 0.05, 'triangle', 0.045),
+    key:    () => blip(340, 0.035, 'square', 0.022),
+    type:   () => blip(300 + Math.random() * 60, 0.028, 'square', 0.018),
+    back:   () => blip(220, 0.05, 'triangle', 0.03),
+    select: () => blip(640, 0.05, 'triangle', 0.04),
+    good:   () => chord([660, 880], 0.16, 0.045),
+    bad:    () => blip(150, 0.22, 'sawtooth', 0.045, 90),
+    win:    () => chord([523, 659, 784, 1047], 0.26, 0.05),
+    lose:   () => chord([330, 262, 196], 0.3, 0.045),
+    tick:   () => blip(880, 0.04, 'sine', 0.035),
+    start:  () => blip(440, 0.12, 'triangle', 0.05, 880),
+    pop:    () => blip(760, 0.045, 'sine', 0.035),
+  };
+
+  BB.soundOn = () => soundOn;
+  BB.setSound = function (on) {
+    soundOn = !!on;
+    lsSet(SOUND_KEY, soundOn);
+    if (soundOn) BB.sfx.click();
+  };
+
+  /* Every button, chip and key makes a noise without each page wiring it up. */
+  function initSoundDelegation() {
+    document.addEventListener('pointerdown', (e) => {
+      const el = e.target.closest('.btn, .chip, .icon-btn, .key, .cword, .card-expand, .tabs button, .play-link, .game-card');
+      if (!el) return;
+      if (el.classList.contains('key')) BB.sfx.key();
+      else if (el.classList.contains('cword')) BB.sfx.select();
+      else BB.sfx.click();
+    }, { passive: true });
+  }
 
   /* ---------- Toasts ---------- */
   BB.toast = function (text, ms) {
@@ -226,6 +313,8 @@
 
   /* ---------- Icons ---------- */
   const ICON = {
+    speaker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/></svg>',
+    muted: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>',
     sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>',
     moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 14.5A8.5 8.5 0 019.5 4a7 7 0 1010.5 10.5z"/></svg>',
     menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
@@ -238,8 +327,12 @@
   BB.ICON = ICON;
 
   /* ---------- Game card with an arrow that opens its modes ---------- */
-  BB.gameCard = function (key, index) {
+  BB.gameCard = function (key, index, opts) {
+    // guard against Array.prototype.map handing us the array as a third argument
+    opts = (opts && !Array.isArray(opts)) ? opts : {};
     const g = BB.GAMES[key];
+    const title = opts.title || g.name;
+    const href = opts.href || g.href;
     const m = g.modes || {};
     let panel = '';
 
@@ -275,15 +368,15 @@
 
     const hasPanel = panel !== '';
     return `<div class="game-card reveal reveal-scale" style="--tile:${g.color};--d:${(index || 0) * 55}ms">
-      <a class="top" href="${g.href}">
+      <a class="top" href="${href}">
         <div class="game-glyph">${g.glyph}</div>
-        <h3>${g.name}</h3>
-        <p>${g.blurb}</p>
+        <h3>${title}</h3>
+        <p>${opts.blurb || g.blurb}</p>
       </a>
       <div class="game-foot">
         <span class="tag">${g.tag}</span>
         <span data-best="${key}"></span>
-        <a class="play-link" href="${g.href}">Play ${ICON.arrow}</a>
+        <a class="play-link" href="${href}">Play ${ICON.arrow}</a>
         ${hasPanel ? `<button class="card-expand" aria-expanded="false" aria-label="More ways to play ${g.name}">${ICON.chevron}</button>` : ''}
       </div>
       ${hasPanel ? `<div class="modes"><div class="modes-inner"><div class="modes-pad">${panel}</div></div></div>` : ''}
@@ -310,7 +403,8 @@
     (root || document).querySelectorAll('[data-best]').forEach((el) => {
       const key = el.getAttribute('data-best');
       const best = BB.bestFor(key);
-      el.innerHTML = (best === undefined || best === null) ? '' : `<span class="best-chip">Best ${BB.GAMES[key].fmt(best)}</span>`;
+      el.innerHTML = (best === undefined || best === null) ? ''
+        : `<span class="best-chip"><span class="crown">👑</span>Best ${BB.GAMES[key].fmt(best)}</span>`;
     });
   };
 
@@ -328,12 +422,22 @@
           <a href="/leaderboards" ${active === 'leaderboards' ? 'class="active"' : ''}>Leaderboards</a>
         </nav>
         <div class="header-actions">
+          <button class="icon-btn" id="bb-sound" aria-label="Sound on or off"></button>
           <button class="icon-btn" id="bb-theme" aria-label="Switch theme"></button>
           <button class="icon-btn nav-toggle" id="bb-menu" aria-label="Menu">${ICON.menu}</button>
           <span id="bb-account"></span>
         </div>
       </div>`;
     return el;
+  }
+
+  function paintSoundBtn() {
+    const b = document.getElementById('bb-sound');
+    if (b) {
+      b.innerHTML = soundOn ? ICON.speaker : ICON.muted;
+      b.title = soundOn ? 'Sound on' : 'Sound off';
+      b.style.opacity = soundOn ? '' : '.55';
+    }
   }
 
   function paintThemeBtn() {
@@ -359,7 +463,6 @@
         <div class="footer-top">
           <div class="footer-brand">
             <a class="brand" href="/"><span class="brand-mark">BB</span><span>BensBenchmark</span></a>
-            <p>Nine games. No email, no ads.</p>
           </div>
           <div class="footer-cols">
             <div class="footer-col"><h4>Word</h4>${col(keys.filter(k => BB.GAMES[k].tag === 'Word'))}</div>
@@ -455,7 +558,10 @@
       else document.body.appendChild(footer);
 
       paintThemeBtn();
+      paintSoundBtn();
       document.getElementById('bb-theme').addEventListener('click', () => { BB.toggleTheme(); paintThemeBtn(); });
+      document.getElementById('bb-sound').addEventListener('click', () => { BB.setSound(!soundOn); paintSoundBtn(); });
+      initSoundDelegation();
       const nav = document.getElementById('bb-nav');
       document.getElementById('bb-menu').addEventListener('click', () => nav.classList.toggle('open'));
       nav.addEventListener('click', (e) => { if (e.target.tagName === 'A') nav.classList.remove('open'); });

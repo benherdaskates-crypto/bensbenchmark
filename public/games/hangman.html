@@ -40,7 +40,6 @@
 
 <script src="/js/app.js"></script>
 <script src="/js/data.js"></script>
-<script src="/js/words.js"></script>
 <script src="/js/game-shell.js"></script>
 <script>
 (function () {
@@ -48,6 +47,17 @@
   var P = new URLSearchParams(location.search);
   var MODE = P.get('mode') === 'infinite' ? 'infinite' : 'daily';
   var MAX_WRONG = 6;
+
+  /* Difficulty is really about how much help the clue gives you. */
+  var LEVELS = {
+    easy:   { label: 'Easy',   maxLen: 7,  clue: 'always', freeLetter: true,  note: 'Clue shown, plus a free letter' },
+    medium: { label: 'Medium', maxLen: 99, clue: 'always', freeLetter: false, note: 'Clue shown' },
+    hard:   { label: 'Hard',   minLen: 8,  clue: 'after',  freeLetter: false, note: 'Clue appears after 3 wrong guesses' }
+  };
+  var DIFF = LEVELS[P.get('diff')] ? P.get('diff') : BB.lsGet('bb_hang_diff', 'medium');
+  if (!LEVELS[DIFF]) DIFF = 'medium';
+  BB.lsSet('bb_hang_diff', DIFF);
+  var L = LEVELS[DIFF];
 
   var store = BB.lsGet('bb_hangman', { streak: 0, played: 0, won: 0 });
   var word = '', hint = '', used = {}, wrong = 0, over = false;
@@ -59,8 +69,16 @@
     '<div class="mode-bar">' +
       '<span class="lbl">Mode</span>' +
       '<div class="chips">' +
-        '<a class="chip' + (MODE === 'daily' ? ' on' : '') + '" href="?mode=daily">Daily</a>' +
-        '<a class="chip' + (MODE === 'infinite' ? ' on' : '') + '" href="?mode=infinite">Endless</a>' +
+        '<a class="chip' + (MODE === 'daily' ? ' on' : '') + '" href="?mode=daily&diff=' + DIFF + '">Daily</a>' +
+        '<a class="chip' + (MODE === 'infinite' ? ' on' : '') + '" href="?mode=infinite&diff=' + DIFF + '">Endless</a>' +
+      '</div>' +
+      '<span class="sep"></span>' +
+      '<span class="lbl">Difficulty</span>' +
+      '<div class="chips">' +
+        Object.keys(LEVELS).map(function (k) {
+          return '<a class="chip' + (k === DIFF ? ' on' : '') + '" href="?mode=' + MODE + '&diff=' + k +
+            '" title="' + LEVELS[k].note + '">' + LEVELS[k].label + '</a>';
+        }).join('') +
       '</div>' +
     '</div>' +
     '<div id="banner"></div>' +
@@ -120,18 +138,50 @@
     cdTimer = setInterval(paint, 1000);
   }
 
+  function pool() {
+    var list = BBDATA.HANGMAN.filter(function (h) {
+      if (L.maxLen && h[0].length > L.maxLen) return false;
+      if (L.minLen && h[0].length < L.minLen) return false;
+      return true;
+    });
+    return list.length ? list : BBDATA.HANGMAN;
+  }
+
   function newGame() {
+    var list = pool();
     var pick = MODE === 'daily'
-      ? BB.dailyPick(BBDATA.HANGMAN, 'hangman')
-      : BBDATA.HANGMAN[Math.floor(Math.random() * BBDATA.HANGMAN.length)];
+      ? BB.dailyPick(list, 'hangman:' + DIFF)
+      : list[Math.floor(Math.random() * list.length)];
     word = pick[0]; hint = pick[1];
     used = {}; wrong = 0; over = false;
-    document.getElementById('hint').textContent = hint;
+    // Easy starts you off with one letter already on the board.
+    if (L.freeLetter) {
+      var uniq = word.split('').filter(function (c, i, a) { return a.indexOf(c) === i; });
+      var vowels = uniq.filter(function (c) { return 'AEIOU'.indexOf(c) > -1; });
+      var from = vowels.length ? vowels : uniq;
+      var give = from[Math.floor(Math.random() * from.length)];
+      if (give) used[give] = true;
+    }
+    paintClue();
     msgEl.textContent = '';
     for (var i = 0; i < MAX_WRONG; i++) document.getElementById('p' + i).classList.remove('show');
     document.querySelectorAll('.key').forEach(function (b) { b.classList.remove('correct', 'absent'); });
+    Object.keys(used).forEach(function (c) {
+      var b = document.querySelector('.key[data-k="' + c.toLowerCase() + '"]');
+      if (b) b.classList.add('correct');
+    });
     BB.setStat('st-left', MAX_WRONG);
     renderWord(); renderUsed();
+  }
+
+  /* Hard keeps the clue back until you have made a few mistakes. */
+  function clueVisible() { return over || L.clue === 'always' || wrong >= 3; }
+
+  function paintClue() {
+    var el = document.getElementById('hint');
+    if (!el) return;
+    if (clueVisible()) { el.textContent = hint; el.style.opacity = ''; }
+    else { el.textContent = 'Hidden until 3 wrong guesses'; el.style.opacity = '.55'; }
   }
 
   function renderWord() {
@@ -159,14 +209,16 @@
     var btn = document.querySelector('.key[data-k="' + letter.toLowerCase() + '"]');
     var hitIt = word.indexOf(ch) > -1;
     if (btn) btn.classList.add(hitIt ? 'correct' : 'absent');
+    if (hitIt) BB.sfx.pop(); else BB.sfx.bad();
     if (!hitIt) {
       document.getElementById('p' + wrong).classList.add('show');
       wrong++;
       BB.setStat('st-left', MAX_WRONG - wrong);
+      paintClue();
     }
     renderWord(); renderUsed();
-    if (isWin()) return end(true);
-    if (wrong >= MAX_WRONG) return end(false);
+    if (isWin()) { BB.sfx.win(); return end(true); }
+    if (wrong >= MAX_WRONG) { BB.sfx.lose(); return end(false); }
   }
 
   function lockDaily(result) {
@@ -174,7 +226,7 @@
     word = result.word; hint = result.hint;
     used = {};
     (result.used || []).forEach(function (c) { used[c] = true; });
-    document.getElementById('hint').textContent = hint;
+    paintClue();
     renderWord(); renderUsed();
     banner('<div class="daily-banner"><b>' + (result.won ? 'Got it' : 'Missed it') + '</b>' +
       '<span class="muted">The word was ' + result.word + '.</span>' +
@@ -193,13 +245,13 @@
     renderWord();
 
     if (MODE === 'daily') {
-      BB.saveDaily(KEY, { won: won, word: word, hint: hint, used: Object.keys(used) });
+      BB.saveDaily(KEY + ':' + DIFF, { won: won, word: word, hint: hint, used: Object.keys(used) });
       banner('<div class="daily-banner"><b>' + (won ? 'Got it' : 'Missed it') + '</b>' +
         '<span style="margin-left:auto">Next in <span class="countdown-num" id="cd">--:--:--</span></span></div>');
       startCountdown();
     }
 
-    var res = won ? await BB.finish(KEY, store.streak, { word: word, mode: MODE }) : { newBest: false };
+    var res = won ? await BB.finish(KEY, store.streak, { word: word, mode: MODE, diff: DIFF }) : { newBest: false };
     BB.setStat('st-best', BB.bestFor(KEY) !== undefined ? BB.bestFor(KEY) : store.streak);
 
     setTimeout(function () {
@@ -241,6 +293,13 @@
         '<div>Type, or tap the letters.</div>' +
         '<div>Start with vowels, then R, S, T, L, N.</div>' +
       '</div>' +
+      '<div class="modes-label mt-3">Difficulty</div>' +
+      '<div style="display:grid;gap:7px;font-size:.88rem;color:var(--text-2)">' +
+        Object.keys(LEVELS).map(function (k) {
+          return '<div><b style="color:var(--text)">' + LEVELS[k].label + '</b> &mdash; ' + LEVELS[k].note +
+            (LEVELS[k].minLen ? ', longer words' : (LEVELS[k].maxLen < 90 ? ', shorter words' : '')) + '</div>';
+        }).join('') +
+      '</div>' +
       '<p class="hint mt-3">Daily is one word for everyone. Endless never runs out.</p>' +
       '<button class="btn btn-block mt-3" data-close><span>Got it</span></button>');
   });
@@ -248,10 +307,10 @@
   newGame();
 
   if (MODE === 'daily') {
-    var done = BB.dailyResult(KEY);
+    var done = BB.dailyResult(KEY + ':' + DIFF);
     if (done) lockDaily(done);
     else banner('<div class="daily-banner"><b>Daily word #' + BB.puzzleNumber() + '</b>' +
-      '<span class="muted">Same word for everyone today</span></div>');
+      '<span class="muted">' + L.label + ' . same word for everyone today</span></div>');
   }
 
   BB.gameInit(KEY, 'mount', null, function () {

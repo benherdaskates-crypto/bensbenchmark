@@ -25,6 +25,7 @@
     animation: cdPop .85s var(--ease);
   }
   @keyframes cdPop { from { opacity: 0; transform: scale(.55); } 60% { opacity: 1; } to { opacity: 1; transform: scale(1); } }
+  .countdown-screen .n.word { font-size: clamp(1.6rem, 6vw, 2.6rem); color: var(--muted); }
 
   /* wordle race */
   .vs-grid { display: grid; gap: 5px; width: min(320px, 82vw); margin: 0 auto; }
@@ -50,7 +51,7 @@
     font-size: clamp(1rem, 2.4vw, 1.2rem);
     line-height: 2; height: 6em; overflow: hidden;
   }
-  .vs-typebox > div { transition: transform .26s var(--ease); }
+  .vs-typebox > div { transition: transform .4s var(--ease); }
   .tw { display: inline-block; margin-right: .55ch; padding: 0 .1ch; border-radius: 3px; }
   .tw.active { background: color-mix(in srgb, var(--pop) 16%, transparent); }
   .tc { color: var(--muted); }
@@ -88,6 +89,30 @@
   .vs-pad.go h3, .vs-pad.go p { color: #fff; }
   .vs-pad h3 { font-family: var(--font-display); font-size: clamp(1.4rem, 5vw, 2rem); font-weight: 700; }
   .vs-pad p { margin-top: 6px; color: var(--text-2); font-size: .92rem; }
+
+  .boards-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-top: 8px; align-items: start; }
+  .mini {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 13px; background: var(--surface);
+    animation: popRow .4s var(--ease) both;
+  }
+  .mini.win { border-color: var(--ink); }
+  .mini h4 { font-size: .85rem; display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+  .mini .res { font-size: .74rem; color: var(--muted); margin-bottom: 9px; }
+  .mini-grid { display: grid; gap: 3px; }
+  .mini-row { display: grid; grid-template-columns: repeat(var(--cols,5), 1fr); gap: 3px; }
+  .mini-cell {
+    aspect-ratio: 1; border-radius: 2px;
+    display: grid; place-items: center;
+    font-size: clamp(.5rem, 1.9vw, .72rem); font-weight: 700;
+    text-transform: uppercase; color: #fff;
+    background: var(--surface-2);
+  }
+  .mini-cell.correct { background: var(--green); }
+  .mini-cell.present { background: var(--yellow); }
+  .mini-cell.absent { background: var(--grey); }
+  .answer-line { text-align: center; margin-top: 18px; font-size: .9rem; }
+  .answer-line b { font-family: var(--font-display); font-size: 1.15rem; letter-spacing: .06em; }
 
   .live-rail { display: grid; gap: 7px; margin-bottom: 18px; }
   .live-row { display: flex; align-items: center; gap: 10px; font-size: .86rem; }
@@ -312,28 +337,38 @@
     stopGame();
     var screen = document.createElement('div');
     screen.className = 'countdown-screen';
-    screen.innerHTML = '<div class="n" id="cdn">3</div>';
+    screen.innerHTML = '<div class="n word" id="cdn">Get ready</div>';
     document.body.appendChild(screen);
 
     renderPlaying(s);
 
     clearInterval(countdownTimer);
-    countdownTimer = setInterval(function () {
-      var left = Math.ceil((s.startAt - Date.now()) / 1000);
+
+    function show(text, isWord) {
       var el = document.getElementById('cdn');
-      if (left > 0) {
-        if (el && el.textContent !== String(left)) {
-          el.textContent = left;
-          el.style.animation = 'none';
-          void el.offsetWidth;
-          el.style.animation = '';
-        }
+      if (!el || el.textContent === text) return;
+      el.textContent = text;
+      el.classList.toggle('word', !!isWord);
+      el.style.animation = 'none';
+      void el.offsetWidth;          // restart the pop animation
+      el.style.animation = '';
+    }
+
+    countdownTimer = setInterval(function () {
+      var remaining = s.startAt - Date.now();
+      if (remaining > 3000) {
+        show('Get ready', true);    // hold still, no numbers yet
+      } else if (remaining > 0) {
+        var n = String(Math.min(3, Math.ceil(remaining / 1000)));
+        if (document.getElementById('cdn') && document.getElementById('cdn').textContent !== n) BB.sfx.tick();
+        show(n, false);
       } else {
         clearInterval(countdownTimer);
+        BB.sfx.start();
         screen.remove();
         startGame(s);
       }
-    }, 90);
+    }, 70);
   }
 
   function renderPlaying(s) {
@@ -372,12 +407,17 @@
         api.lastProgress = Math.max(api.lastProgress, p);
         VS.report(api.lastProgress, false);
       },
-      finish: function (score) {
-        VS.report(100, true, score, true);
-        // also count it towards the solo leaderboard where it makes sense
-        if (s.game === 'typing') BB.submitScore('typing', score, { versus: true });
-        if (s.game === 'aim') BB.submitScore('aim', score, { versus: true });
-        if (s.game === 'reaction') BB.submitScore('reaction', score, { versus: true });
+      finish: function (score, detail) {
+        VS.report(100, true, score, true, detail);
+        // friend games count towards your stats and the leaderboards, same as solo
+        if (s.game === 'wordle') {
+          BB.recordWordle(score < 99, { tries: score, len: s.options.len, mode: 'versus' })
+            .then(function (r) { if (r.res.newBest) BB.toast('Personal best'); });
+        } else {
+          BB.submitScore(s.game, score, { versus: true }).then(function (r) {
+            if (r.newBest) BB.toast('Personal best');
+          });
+        }
       },
     };
     teardown = runner(board, { seed: s.seed, len: s.options.len, dur: s.options.dur }, api);
@@ -387,6 +427,33 @@
     if (teardown) { try { teardown(); } catch (e) {} teardown = null; }
     clearInterval(countdownTimer);
     document.querySelectorAll('.countdown-screen').forEach(function (e) { e.remove(); });
+  }
+
+  /* Everyone's finished grid, coloured against the word the room played. */
+  function boardsHtml(s, ranked) {
+    var len = s.options.len || 5;
+    var answer;
+    try { answer = VS.wordleAnswer(s.seed, len); } catch (e) { return ''; }
+    if (!ranked.some(function (p) { return p.detail && p.detail.length; })) return '';
+
+    var cards = ranked.map(function (p, i) {
+      var rows = (p.detail || []).map(function (g) {
+        var marks = VS.markGuess(g, answer);
+        return '<div class="mini-row" style="--cols:' + len + '">' +
+          g.split('').map(function (ch, j) {
+            return '<div class="mini-cell ' + marks[j] + '">' + ch + '</div>';
+          }).join('') + '</div>';
+      }).join('');
+      return '<div class="mini' + (i === 0 ? ' win' : '') + '" style="animation-delay:' + (i * 90 + 120) + 'ms">' +
+        '<h4><span class="avatar-sm" style="width:20px;height:20px;font-size:.55rem">' + initials(p.name) + '</span>' +
+        (p.id === VS.pid ? 'You' : p.name) + '</h4>' +
+        '<div class="res">' + VS.scoreLabel(s.game, p.score) + '</div>' +
+        '<div class="mini-grid">' + (rows || '<div class="res">No guesses</div>') + '</div>' +
+        '</div>';
+    }).join('');
+
+    return '<div class="answer-line">The word was <b>' + answer.toUpperCase() + '</b></div>' +
+      '<div class="boards-out">' + cards + '</div>';
   }
 
   /* ---------------- results ---------------- */
@@ -407,6 +474,7 @@
             '</div>';
         }).join('') +
       '</div>' +
+      (s.game === 'wordle' ? boardsHtml(s, ranked) : '') +
       '<div class="row mt-4" style="justify-content:center">' +
         (VS.isHost()
           ? '<button class="btn" id="again"><span>Back to lobby</span></button>'

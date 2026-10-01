@@ -33,8 +33,9 @@
   --radius: 6px;
   --radius-lg: 10px;
   --pill: 100px;
-  --ease: cubic-bezier(.2, .8, .3, 1);
+  --ease: cubic-bezier(.25, .46, .35, 1);
   --ease-soft: cubic-bezier(.4, 0, .2, 1);
+  --ease-in-out: cubic-bezier(.45, .05, .25, 1);
   --maxw: 1080px;
 
   --font: "Libre Franklin", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -119,7 +120,7 @@ p { margin: 0; }
   display: grid; place-items: center;
   font-family: var(--font);
   font-size: .68rem; font-weight: 800;
-  transition: transform .45s var(--ease);
+  transition: transform .6s var(--ease);
 }
 .brand:hover .brand-mark { transform: rotate(-10deg) scale(1.1); }
 
@@ -136,7 +137,7 @@ p { margin: 0; }
   position: absolute; left: 11px; right: 11px; bottom: 3px;
   height: 1.5px; background: var(--ink);
   transform: scaleX(0); transform-origin: left;
-  transition: transform .32s var(--ease);
+  transition: transform .46s var(--ease);
 }
 .nav a:hover { color: var(--text); }
 .nav a:hover::after { transform: scaleX(1); }
@@ -151,7 +152,7 @@ p { margin: 0; }
   background: var(--surface);
   border-radius: var(--pill);
   cursor: pointer;
-  transition: border-color .2s, transform .2s var(--ease), background .2s;
+  transition: border-color .34s var(--ease), transform .34s var(--ease), background .34s var(--ease);
 }
 .icon-btn:hover { border-color: var(--ink); transform: translateY(-1px); }
 .icon-btn:active { transform: scale(.93); }
@@ -171,7 +172,7 @@ p { margin: 0; }
   cursor: pointer; white-space: nowrap;
   overflow: hidden;
   isolation: isolate;
-  transition: transform .2s var(--ease), color .28s var(--ease-soft), background .28s var(--ease-soft), border-color .2s, opacity .2s;
+  transition: transform .34s var(--ease), color .34s var(--ease-soft), background .34s var(--ease-soft), border-color .34s var(--ease), opacity .3s;
 }
 .btn > * { position: relative; z-index: 1; }
 .btn:hover { transform: translateY(-2px); }
@@ -213,6 +214,16 @@ p { margin: 0; }
   70% { box-shadow: 0 0 0 7px transparent; }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
+.top-stats {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; flex-wrap: wrap;
+  font-size: .82rem; color: var(--muted);
+  margin-bottom: 18px;
+}
+.top-stats b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.top-stats .dot-live { margin-right: 5px; }
+.sep-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--border-mid); }
+
 .hero h1 {
   margin: 16px 0 0;
   font-family: var(--font-display);
@@ -239,7 +250,7 @@ p { margin: 0; }
   font-size: .72rem; font-weight: 700;
   letter-spacing: .12em; text-transform: uppercase;
   background: none; border: 0;
-  transition: color .22s;
+  transition: color .34s var(--ease);
 }
 .scroll-cue:hover { color: var(--text); }
 .scroll-cue svg { width: 20px; height: 20px; animation: bob 1.9s ease-in-out infinite; }
@@ -277,7 +288,7 @@ p { margin: 0; }
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: border-color .28s var(--ease), transform .34s var(--ease), box-shadow .34s var(--ease);
+  transition: border-color .45s var(--ease), transform .5s var(--ease), box-shadow .5s var(--ease);
 }
 .game-card:hover {
   border-color: var(--ink);
@@ -292,7 +303,7 @@ p { margin: 0; }
   font-size: 1.2rem;
   background: color-mix(in srgb, var(--tile, var(--pop)) 15%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--tile, var(--pop)) 30%, transparent);
-  transition: transform .45s var(--ease), background .3s;
+  transition: transform .6s var(--ease), background .45s var(--ease);
 }
 .game-card:hover .game-glyph { transform: translateY(-2px) rotate(-7deg) scale(1.09); }
 .game-card h3 { margin-top: 14px; font-size: 1.08rem; font-weight: 700; letter-spacing: -.012em; }
@@ -316,13 +327,14 @@ p { margin: 0; }
   background: color-mix(in srgb, var(--tile, var(--pop)) 9%, transparent);
 }
 .best-chip { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); font-size: .8rem; }
+.crown { margin-right: 4px; font-size: .92em; line-height: 1; }
 
 .play-link {
   margin-left: auto;
   display: inline-flex; align-items: center; gap: 5px;
   font-weight: 700; font-size: .83rem;
 }
-.play-link svg { width: 13px; height: 13px; transition: transform .3s var(--ease); }
+.play-link svg { width: 13px; height: 13px; transition: transform .45s var(--ease); }
 .game-card:hover .play-link svg { transform: translateX(5px); }
 
 /* expander */
@@ -334,9 +346,9 @@ p { margin: 0; }
   border-radius: var(--pill);
   cursor: pointer;
   color: var(--text-2);
-  transition: border-color .2s, color .2s, background .2s;
+  transition: border-color .34s var(--ease), color .34s var(--ease), background .34s var(--ease);
 }
-.card-expand svg { width: 14px; height: 14px; transition: transform .38s var(--ease); }
+.card-expand svg { width: 14px; height: 14px; transition: transform .52s var(--ease); }
 .card-expand:hover { border-color: var(--ink); color: var(--text); }
 .card-expand[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .card-expand[aria-expanded="true"] svg { transform: rotate(180deg); }
@@ -344,7 +356,7 @@ p { margin: 0; }
 .modes {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows .42s var(--ease);
+  transition: grid-template-rows .55s var(--ease-in-out);
   background: var(--bg-tint);
   border-top: 1px solid transparent;
 }
@@ -366,7 +378,7 @@ p { margin: 0; }
   background: var(--surface);
   font-size: .81rem; font-weight: 600;
   cursor: pointer;
-  transition: transform .22s var(--ease), background .22s, color .22s, border-color .22s;
+  transition: transform .34s var(--ease), background .34s var(--ease), color .34s var(--ease), border-color .34s var(--ease);
 }
 .chip:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); transform: translateY(-2px); }
 .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
@@ -395,7 +407,7 @@ p { margin: 0; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 11px 12px; text-align: center;
-  transition: border-color .25s;
+  transition: border-color .36s var(--ease);
 }
 .stat-box:hover { border-color: var(--border-mid); }
 .stat-box .v { font-size: 1.28rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
@@ -404,14 +416,15 @@ p { margin: 0; }
 
 /* ---------------- Steps ---------------- */
 .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0; border-top: 1px solid var(--border); }
-.step { padding: 22px 20px 22px 0; border-right: 1px solid var(--border); }
+.step { padding: 24px 20px; border-right: 1px solid var(--border); text-align: center; }
 .step:last-child { border-right: 0; }
 .step-n {
   font-family: var(--font-display);
   font-size: 1.5rem; font-weight: 700; color: var(--muted);
-  transition: color .25s;
+  transition: color .36s var(--ease);
 }
 .step:hover .step-n { color: var(--ink); }
+.step h3 { justify-content: center; }
 .step h3 { margin-top: 6px; font-size: 1rem; }
 .step p { margin-top: 5px; color: var(--text-2); font-size: .89rem; }
 
@@ -458,7 +471,7 @@ textarea.input { resize: vertical; min-height: 104px; }
   border-radius: var(--pill);
   font-size: .84rem; font-weight: 600; color: var(--text-2);
   cursor: pointer;
-  transition: background .26s var(--ease), color .2s;
+  transition: background .38s var(--ease), color .3s var(--ease);
 }
 .tabs button:hover { color: var(--text); }
 .tabs button.on { background: var(--ink); color: var(--bg); }
@@ -473,7 +486,7 @@ textarea.input { resize: vertical; min-height: 104px; }
 .footer-col a {
   display: block; padding: 3px 0;
   font-size: .87rem; color: var(--text-2);
-  transition: color .18s, transform .22s var(--ease);
+  transition: color .3s var(--ease), transform .36s var(--ease);
 }
 .footer-col a:hover { color: var(--text); transform: translateX(4px); }
 .footer-bottom {
@@ -491,7 +504,7 @@ textarea.input { resize: vertical; min-height: 104px; }
 /* ---------------- Reveal ---------------- */
 .reveal {
   opacity: 0; transform: translateY(16px);
-  transition: opacity .62s var(--ease), transform .62s var(--ease);
+  transition: opacity .8s var(--ease), transform .8s var(--ease);
   transition-delay: var(--d, 0ms);
 }
 .reveal.in { opacity: 1; transform: none; }
@@ -521,7 +534,7 @@ textarea.input { resize: vertical; min-height: 104px; }
   display: inline-flex; align-items: center; gap: 6px;
   font-size: .84rem; color: var(--muted); font-weight: 600;
   margin-bottom: 14px; white-space: nowrap;
-  transition: color .2s, transform .22s var(--ease);
+  transition: color .3s var(--ease), transform .36s var(--ease);
 }
 .back-link:hover { color: var(--text); transform: translateX(-3px); }
 .back-link svg { width: 14px; height: 14px; flex: 0 0 auto; }
@@ -595,7 +608,7 @@ textarea.input { resize: vertical; min-height: 104px; }
   float: right; width: 28px; height: 28px;
   border: 0; background: var(--surface-2); border-radius: 50%;
   cursor: pointer; display: grid; place-items: center; color: var(--muted);
-  transition: background .2s, color .2s, transform .2s var(--ease);
+  transition: background .34s var(--ease), color .34s var(--ease), transform .4s var(--ease);
 }
 .modal-close:hover { background: var(--ink); color: var(--bg); transform: rotate(90deg); }
 
@@ -608,7 +621,7 @@ textarea.input { resize: vertical; min-height: 104px; }
   background: var(--surface-2);
   font-size: .84rem; font-weight: 700; text-transform: uppercase;
   cursor: pointer; display: grid; place-items: center;
-  transition: transform .1s var(--ease), background .3s, color .3s, opacity .3s;
+  transition: transform .16s var(--ease), background .4s var(--ease), color .4s var(--ease), opacity .4s var(--ease);
 }
 .key:hover { background: var(--border); }
 .key:active { transform: scale(.9); }
@@ -623,7 +636,7 @@ textarea.input { resize: vertical; min-height: 104px; }
   text-align: left; font-size: .67rem; text-transform: uppercase; letter-spacing: .1em;
   color: var(--muted); font-weight: 800; padding: 0 8px 8px; border-bottom: 1px solid var(--border);
 }
-.lb-table td { padding: 10px 8px; border-bottom: 1px solid var(--border); transition: background .2s; }
+.lb-table td { padding: 10px 8px; border-bottom: 1px solid var(--border); transition: background .32s var(--ease); }
 .lb-table tr:last-child td { border-bottom: 0; }
 .lb-table tbody tr:hover td { background: var(--surface-2); }
 .lb-table td.rank { width: 34px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 700; }
@@ -654,7 +667,7 @@ textarea.input { resize: vertical; min-height: 104px; }
   border-radius: var(--radius);
   background: var(--surface);
   animation: slideIn .34s var(--ease);
-  transition: border-color .25s, transform .25s var(--ease);
+  transition: border-color .36s var(--ease), transform .36s var(--ease);
 }
 .player-row:hover { border-color: var(--border-mid); }
 @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
@@ -675,7 +688,7 @@ textarea.input { resize: vertical; min-height: 104px; }
 .badge.done { border-color: var(--good); color: var(--good); }
 
 .race-bar { height: 6px; background: var(--surface-2); border-radius: var(--pill); overflow: hidden; flex: 1; min-width: 60px; }
-.race-bar i { display: block; height: 100%; background: var(--ink); border-radius: var(--pill); width: 0; transition: width .45s var(--ease); }
+.race-bar i { display: block; height: 100%; background: var(--ink); border-radius: var(--pill); width: 0; transition: width .6s var(--ease); }
 .race-bar.me i { background: var(--pop); }
 
 .podium { display: grid; gap: 8px; }
@@ -719,7 +732,7 @@ textarea.input { resize: vertical; min-height: 104px; }
   .brand > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .header-actions { gap: 5px; margin-left: 4px; }
   #bb-account .btn { max-width: 90px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .step { border-right: 0; border-bottom: 1px solid var(--border); padding-right: 0; }
+  .step { border-right: 0; border-bottom: 1px solid var(--border); }
   .step:last-child { border-bottom: 0; }
   .footer-cols { gap: 30px; }
 }

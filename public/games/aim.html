@@ -108,6 +108,7 @@
     var el = e.currentTarget;
     if (el.classList.contains('pop')) return;
     el.classList.add('pop');
+    BB.sfx.pop();
     setTimeout(function () { el.remove(); }, 230);
 
     var now = performance.now();

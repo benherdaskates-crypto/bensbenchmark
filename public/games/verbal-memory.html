@@ -116,6 +116,7 @@
     seen.add(current);
 
     if (right) {
+      BB.sfx.good();
       score++;
       BB.setStat('st-score', score);
       BB.setStat('st-seen', seen.size);
@@ -123,6 +124,7 @@
       var f = document.getElementById('flash');
       if (f) { f.textContent = 'Correct'; f.style.color = 'var(--good)'; }
     } else {
+      BB.sfx.bad();
       lives--;
       paintHearts();
       BB.setStat('st-seen', seen.size);

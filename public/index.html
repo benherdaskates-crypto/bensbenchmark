@@ -16,6 +16,11 @@
 
   <section class="hero">
     <div class="wrap">
+      <div class="top-stats reveal">
+        <span>Total users <b data-stat="users">—</b></span>
+        <span class="sep-dot"></span>
+        <span><span class="dot-live"></span>Online now <b data-stat="onlineNow">—</b></span>
+      </div>
       <h1 class="reveal" style="--d:70ms">A puzzle a day.<br>Or a hundred.</h1>
       <p class="hero-sub reveal" style="--d:140ms">
         Wordle, Connections and Hangman, plus speed and memory tests. Play the daily one, then keep going.
@@ -35,13 +40,20 @@
     <div class="wrap">
       <div class="section-head reveal">
         <div>
-          <div class="kicker">Word</div>
-          <h2>Play today's, then play again</h2>
-          <p>Tap the arrow on a card for daily puzzles, word lengths and endless mode.</p>
+          <h2>Daily Puzzles</h2>
+          <p>One of each, the same for everyone, every day.</p>
         </div>
         <a class="btn btn-ghost btn-sm" href="/leaderboards"><span>Leaderboards</span></a>
       </div>
-      <div class="card-grid" id="grid-word"></div>
+      <div class="card-grid" id="grid-daily"></div>
+
+      <div class="section-head reveal mt-4">
+        <div>
+          <h2>Endless</h2>
+          <p>Finished the daily? These never run out.</p>
+        </div>
+      </div>
+      <div class="card-grid" id="grid-endless"></div>
     </div>
   </section>
 
@@ -106,16 +118,28 @@
 </main>
 
 <script src="/js/app.js"></script>
-<script src="/js/data.js"></script>
-<script src="/js/words.js"></script>
 <script>
 (function () {
   document.getElementById('cue-icon').innerHTML = BB.ICON.down;
 
-  var WORD = ['wordle', 'connections', 'hangman'];
+  var DAILY = [
+    { key: 'wordle', href: '/games/wordle?mode=daily&len=5' },
+    { key: 'connections', href: '/games/connections?mode=daily' },
+    { key: 'hangman', href: '/games/hangman?mode=daily' }
+  ];
+  var ENDLESS = [
+    { key: 'wordle', title: 'Unlimited Wordle', href: '/games/wordle?mode=infinite&len=5', blurb: 'A new word the moment you finish.' },
+    { key: 'connections', title: 'Unlimited Connections', href: '/games/connections?mode=infinite', blurb: 'Fresh groups every single time.' },
+    { key: 'hangman', title: 'Unlimited Hangman', href: '/games/hangman?mode=infinite', blurb: 'Keep guessing for as long as you like.' }
+  ];
   var BENCH = ['typing', 'reaction', 'aim', 'number', 'sequence', 'verbal'];
-  document.getElementById('grid-word').innerHTML = WORD.map(BB.gameCard).join('');
-  document.getElementById('grid-bench').innerHTML = BENCH.map(BB.gameCard).join('');
+
+  document.getElementById('grid-daily').innerHTML =
+    DAILY.map(function (d, i) { return BB.gameCard(d.key, i, d); }).join('');
+  document.getElementById('grid-endless').innerHTML =
+    ENDLESS.map(function (d, i) { return BB.gameCard(d.key, i, d); }).join('');
+  document.getElementById('grid-bench').innerHTML =
+    BENCH.map(function (k, i) { return BB.gameCard(k, i); }).join('');
   BB.wireCards();
 
   document.getElementById('cue-games').addEventListener('click', function () {

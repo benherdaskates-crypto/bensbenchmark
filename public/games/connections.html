@@ -20,7 +20,7 @@
     font-weight: 700; font-size: clamp(.6rem, 2.4vw, .88rem);
     text-transform: uppercase; cursor: pointer; user-select: none;
     word-break: break-word; hyphens: auto;
-    transition: transform .16s var(--ease), background .2s, color .2s, border-color .2s;
+    transition: transform .3s var(--ease), background .3s var(--ease), color .3s var(--ease), border-color .3s var(--ease);
   }
   .cword:hover { border-color: var(--border-mid); transform: translateY(-2px); }
   .cword.on { background: var(--ink); color: var(--bg); border-color: var(--ink); transform: translateY(-2px) scale(.97); }
@@ -28,6 +28,36 @@
   @keyframes cshake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
   .cword.bump { animation: cbump .36s var(--ease); }
   @keyframes cbump { 45% { transform: translateY(-9px); } }
+
+  /* the one-by-one lift while your guess is being checked */
+  .cword.checking { animation: clift .42s var(--ease); }
+  @keyframes clift {
+    0%, 100% { transform: translateY(-2px) scale(.97); }
+    45% { transform: translateY(-16px) scale(1.02); }
+  }
+  /* a correct group gathers before it locks in */
+  .cword.gather { animation: cgather .34s var(--ease) forwards; }
+  @keyframes cgather { to { transform: scale(.82); opacity: 0; } }
+
+  /* taking a hit */
+  .damage {
+    position: fixed; inset: 0; z-index: 390; pointer-events: none;
+    box-shadow: inset 0 0 110px 26px rgba(192, 57, 43, .62),
+                inset 0 0 0 3px rgba(192, 57, 43, .85);
+    animation: hurt .72s ease forwards;
+  }
+  @keyframes hurt { 0% { opacity: 0; } 14% { opacity: 1; } 100% { opacity: 0; } }
+  .board-area.hit { animation: boardHit .42s var(--ease-soft); }
+  @keyframes boardHit {
+    20% { transform: translateX(-6px); } 45% { transform: translateX(6px); }
+    70% { transform: translateX(-3px); } 100% { transform: none; }
+  }
+  .life.losing { animation: lifePop .5s var(--ease); }
+  @keyframes lifePop {
+    0% { transform: scale(1); background: var(--bad); }
+    45% { transform: scale(1.9); background: var(--bad); }
+    100% { transform: scale(.7); }
+  }
   .solved {
     grid-column: 1 / -1; border-radius: 6px; padding: 12px 15px;
     text-align: center; color: #fff; animation: solveIn .46s var(--ease);
@@ -50,7 +80,6 @@
 
 <script src="/js/app.js"></script>
 <script src="/js/data.js"></script>
-<script src="/js/words.js"></script>
 <script src="/js/game-shell.js"></script>
 <script>
 (function () {
@@ -61,7 +90,7 @@
   var MAX_MISTAKES = 4;
 
   var store = BB.lsGet('bb_conn', { wins: 0, played: 0, perfect: 0 });
-  var puzzle = [], tiles = [], selected = [], solved = [], mistakes = 0, over = false;
+  var puzzle = [], tiles = [], selected = [], solved = [], mistakes = 0, over = false, busy = false;
   var cdTimer = null;
 
   document.getElementById('mount').innerHTML =
@@ -129,7 +158,7 @@
       }).join('') + '</div>';
     }
     boardEl.innerHTML = html;
-    goBtn.disabled = selected.length !== 4 || over;
+    goBtn.disabled = selected.length !== 4 || over || busy;
   }
 
   function paintLives() {
@@ -167,7 +196,7 @@
 
   boardEl.addEventListener('click', function (e) {
     var el = e.target.closest('.cword');
-    if (!el || over) return;
+    if (!el || over || busy) return;
     var w = el.getAttribute('data-w');
     var i = selected.indexOf(w);
     if (i > -1) selected.splice(i, 1);
@@ -184,16 +213,61 @@
     });
   });
 
-  goBtn.addEventListener('click', function () {
-    if (selected.length !== 4 || over) return;
+  var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+
+  /* Lift the four picks one after another, the way the newspaper version
+     does, so there is a beat before you find out. */
+  function checkWave() {
+    var els = [].slice.call(document.querySelectorAll('.cword.on'));
+    els.forEach(function (el, i) {
+      setTimeout(function () {
+        el.classList.add('checking');
+        BB.sfx.tick();
+        setTimeout(function () { el.classList.remove('checking'); }, 430);
+      }, i * 130);
+    });
+    return wait(els.length * 130 + 320);
+  }
+
+  function damageFlash() {
+    BB.sfx.bad();
+    var el = document.createElement('div');
+    el.className = 'damage';
+    document.body.appendChild(el);
+    setTimeout(function () { el.remove(); }, 760);
+    var board = document.querySelector('.board-area');
+    board.classList.add('hit');
+    setTimeout(function () { board.classList.remove('hit'); }, 440);
+    var dots = document.querySelectorAll('.life');
+    var dot = dots[mistakes - 1];
+    if (dot) {
+      dot.classList.add('losing');
+      setTimeout(function () { dot.classList.remove('losing'); }, 520);
+    }
+  }
+
+  goBtn.addEventListener('click', async function () {
+    if (selected.length !== 4 || over || busy) return;
+    busy = true;
+    goBtn.disabled = true;
+    msgEl.textContent = '';
+
+    await checkWave();
+
     var picked = tiles.filter(function (t) { return selected.indexOf(t.word) > -1; });
     var groups = {};
     picked.forEach(function (t) { groups[t.group] = (groups[t.group] || 0) + 1; });
     var gi = Object.keys(groups).find(function (k) { return groups[k] === 4; });
 
     if (gi !== undefined) {
+      BB.sfx.good();
+      document.querySelectorAll('.cword.on').forEach(function (el, i) {
+        setTimeout(function () { el.classList.add('gather'); BB.sfx.pop(); }, i * 45);
+      });
+      await wait(320);
       solved.push(Number(gi));
       selected = [];
+      busy = false;
       render();
       if (solved.length === 4) return win();
       msgEl.textContent = 'Correct';
@@ -204,13 +278,16 @@
     var top = Math.max.apply(null, Object.values(groups));
     mistakes++;
     paintLives();
+    damageFlash();
     document.querySelectorAll('.cword.on').forEach(function (el) {
       el.classList.add('shake');
       setTimeout(function () { el.classList.remove('shake'); }, 460);
     });
     msgEl.textContent = top === 3 ? 'One away' : 'Not a group';
     setTimeout(function () { if (!over) msgEl.textContent = ''; }, 1700);
-    if (mistakes >= MAX_MISTAKES) setTimeout(lose, 500);
+    busy = false;
+    goBtn.disabled = selected.length !== 4 || over;
+    if (mistakes >= MAX_MISTAKES) setTimeout(lose, 620);
   });
 
   async function win() {

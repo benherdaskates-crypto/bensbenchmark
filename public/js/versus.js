@@ -45,12 +45,12 @@
     try { navigator.sendBeacon('/api/rooms/' + VS.code + '/leave', new Blob([body], { type: 'application/json' })); } catch (e) {}
     VS.forget();
   };
-  VS.report = function (progress, done, score, force) {
+  VS.report = function (progress, done, score, force, detail) {
     const now = Date.now();
     if (!done && !force && now - lastSent < 420) return Promise.resolve();
     lastSent = now;
     return BB.api('/api/rooms/' + VS.code + '/progress', {
-      method: 'POST', body: JSON.stringify({ pid: VS.pid, progress, done: !!done, score }),
+      method: 'POST', body: JSON.stringify({ pid: VS.pid, progress, done: !!done, score, detail }),
     }).catch(() => {});
   };
 
@@ -72,6 +72,27 @@
     return VS.state && VS.state.players.find((p) => p.id === VS.pid);
   };
   VS.isHost = function () { return VS.state && VS.state.hostId === VS.pid; };
+
+  /* The word a given room was playing, derived from its seed. */
+  VS.wordleAnswer = function (seed, len) {
+    return BB.pick(BB.rng(seed + ':w' + len), BBDATA.wordsFor(len).answers);
+  };
+
+  /* Colour a guess against the answer: the standard greens-then-yellows pass. */
+  VS.markGuess = function (guess, target) {
+    const n = target.length;
+    const marks = new Array(n).fill('absent');
+    const pool = {};
+    for (let i = 0; i < n; i++) {
+      if (guess[i] === target[i]) marks[i] = 'correct';
+      else pool[target[i]] = (pool[target[i]] || 0) + 1;
+    }
+    for (let i = 0; i < n; i++) {
+      if (marks[i] === 'correct') continue;
+      if (pool[guess[i]] > 0) { marks[i] = 'present'; pool[guess[i]]--; }
+    }
+    return marks;
+  };
 
   /* ---------- Ranking ---------- */
   // wordle score = tries used (99 means not solved); lower is better everywhere except typing.
@@ -217,10 +238,10 @@
 
       if (won) {
         over = true;
-        setTimeout(() => { msgEl.textContent = 'Solved in ' + tries; api.finish(tries); }, marks.length * 130 + 320);
+        setTimeout(() => { msgEl.textContent = 'Solved in ' + tries; api.finish(tries, guesses.slice(0, tries)); }, marks.length * 130 + 320);
       } else if (row >= ROWS) {
         over = true;
-        setTimeout(() => { msgEl.textContent = 'It was ' + answer.toUpperCase(); api.finish(99); }, marks.length * 130 + 320);
+        setTimeout(() => { msgEl.textContent = 'It was ' + answer.toUpperCase(); api.finish(99, guesses.slice(0, ROWS)); }, marks.length * 130 + 320);
       }
     }
 

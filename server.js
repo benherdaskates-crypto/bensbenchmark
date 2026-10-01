@@ -7,6 +7,7 @@
 // - "Request a game" form that emails you (once SMTP is configured in .env)
 
 const express = require('express');
+const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -29,7 +30,7 @@ const DB_FILE = path.join(DATA_DIR, 'db.json');
 const SESSION_DAYS = 90; // how long a remembered device stays logged in
 
 // ---------- Tiny JSON database ----------
-let db = { users: [], sessions: [], requests: [] };
+let db = { users: [], sessions: [], requests: [], dailyStats: {} };
 function loadDb() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (fs.existsSync(DB_FILE)) {
@@ -80,6 +81,8 @@ const GAMES = {
 // ---------- App ----------
 const app = express();
 app.set('trust proxy', 1);
+// gzip everything except the room event stream, which must not be buffered
+app.use(compression({ filter: (req, res) => !req.path.endsWith('/events') && compression.filter(req, res) }));
 app.use(express.json({ limit: '50kb' }));
 app.use(cookieParser());
 
@@ -251,13 +254,53 @@ app.get('/api/leaderboards', (req, res) => {
   res.json({ games: GAMES, boards: out });
 });
 
+// ---------- Daily puzzle results, pooled across everyone ----------
+// Key looks like "wordle:5:12" (game, word length, puzzle number).
+const DAILY_KEY = /^[a-z]+:\d{1,2}:\d{1,6}$/;
+
+app.post('/api/daily-result', (req, res) => {
+  if (!limit('daily:' + req.ip, 60, 60 * 60e3)) return res.status(429).json({ error: 'Too many results' });
+  const { key, tries } = req.body || {};
+  if (typeof key !== 'string' || !DAILY_KEY.test(key)) return res.status(400).json({ error: 'Bad key' });
+  const n = Number(tries);
+  if (!Number.isInteger(n) || n < 0 || n > 6) return res.status(400).json({ error: 'Bad result' });
+
+  db.dailyStats = db.dailyStats || {};
+  const row = (db.dailyStats[key] = db.dailyStats[key] || { t: [0, 0, 0, 0, 0, 0], fail: 0 });
+  if (n === 0) row.fail++;
+  else row.t[n - 1]++;
+
+  // keep only recent puzzles so the file cannot grow without end
+  const keys = Object.keys(db.dailyStats);
+  if (keys.length > 400) {
+    keys.sort((a, b) => Number(a.split(':')[2]) - Number(b.split(':')[2]));
+    keys.slice(0, keys.length - 400).forEach((k) => delete db.dailyStats[k]);
+  }
+  saveDb();
+  res.json({ stats: row });
+});
+
+app.get('/api/daily-stats/:key', (req, res) => {
+  if (!DAILY_KEY.test(req.params.key)) return res.status(400).json({ error: 'Bad key' });
+  const row = (db.dailyStats || {})[req.params.key] || { t: [0, 0, 0, 0, 0, 0], fail: 0 };
+  res.json({ stats: row, total: row.t.reduce((a, b) => a + b, 0) + row.fail });
+});
+
 // ---------- Community stats (for the home page footer) ----------
 app.get('/api/community', (req, res) => {
-  const day = Date.now() - 864e5;
+  const now = Date.now();
+  const day = now - 864e5;
+  const recently = now - 5 * 60e3;
   const totalGames = db.users.reduce((acc, u) => acc + Object.values(u.history || {}).reduce((a, h) => a + h.length, 0), 0);
+  // anyone in a party room counts as online even without an account
+  const inRooms = new Set();
+  for (const room of rooms.values()) {
+    for (const p of room.players) if (now - p.lastSeen < PLAYER_IDLE_MS) inRooms.add(room.code + ':' + p.id);
+  }
   res.json({
     users: db.users.length,
     activeToday: db.users.filter((u) => (u.lastSeen || 0) > day).length,
+    onlineNow: db.users.filter((u) => (u.lastSeen || 0) > recently).length + inRooms.size,
     gamesPlayed: totalGames,
   });
 });
@@ -337,6 +380,7 @@ function roomState(room) {
       done: p.done,
       finishedAt: p.finishedAt,
       place: p.place,
+      detail: p.detail || null,
     })),
   };
 }
@@ -465,8 +509,8 @@ app.post('/api/rooms/:code/start', (req, res) => {
   room.options = { len, dur };
   room.seed = crypto.randomBytes(6).toString('hex');
   room.status = 'playing';
-  room.startAt = Date.now() + 3200; // shared countdown
-  room.players.forEach((p) => { p.progress = 0; p.score = null; p.done = false; p.finishedAt = 0; p.place = 0; });
+  room.startAt = Date.now() + 4300; // brief pause, then a 3-2-1 count
+  room.players.forEach((p) => { p.progress = 0; p.score = null; p.done = false; p.finishedAt = 0; p.place = 0; p.detail = null; });
   broadcast(room);
   res.json({ state: roomState(room) });
 });
@@ -476,8 +520,14 @@ app.post('/api/rooms/:code/progress', (req, res) => {
   if (!room) return;
   const p = findPlayer(room, req.body && req.body.pid);
   if (!p) return res.status(404).json({ error: 'You are not in this room' });
-  const { progress, done, score } = req.body || {};
+  const { progress, done, score, detail } = req.body || {};
   if (Number.isFinite(Number(progress))) p.progress = Math.max(0, Math.min(100, Number(progress)));
+  // detail is a small guess grid, e.g. ["crane","slope"]. Kept tiny on purpose.
+  if (Array.isArray(detail)) {
+    p.detail = detail.slice(0, 8)
+      .filter((w) => typeof w === 'string' && /^[a-z]{1,8}$/.test(w))
+      .map((w) => w.toLowerCase());
+  }
   if (done && !p.done) {
     p.done = true;
     p.finishedAt = Date.now();
@@ -496,7 +546,7 @@ app.post('/api/rooms/:code/again', (req, res) => {
   if ((req.body && req.body.pid) !== room.hostId) return res.status(403).json({ error: 'Only the host can do that' });
   findPlayer(room, req.body.pid);
   room.status = 'lobby';
-  room.players.forEach((p) => { p.progress = 0; p.score = null; p.done = false; p.finishedAt = 0; p.place = 0; });
+  room.players.forEach((p) => { p.progress = 0; p.score = null; p.done = false; p.finishedAt = 0; p.place = 0; p.detail = null; });
   broadcast(room);
   res.json({ state: roomState(room) });
 });

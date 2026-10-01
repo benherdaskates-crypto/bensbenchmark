@@ -40,7 +40,6 @@
 </main>
 
 <script src="/js/app.js"></script>
-<script src="/js/data.js"></script>
 <script src="/js/words.js"></script>
 <script src="/js/game-shell.js"></script>
 <script>
@@ -52,6 +51,7 @@
   var ROWS = 6;
 
   var store = BB.lsGet('bb_wordle', { streak: 0, played: 0, won: 0 });
+  if (!store.dist) store.dist = [0, 0, 0, 0, 0, 0];
   var answer = '', row = 0, col = 0, over = false, guesses = [], keyState = {};
   var dailyId = KEY + ':' + LEN;
   var cdTimer = null;
@@ -133,11 +133,42 @@
     return list[Math.floor(Math.random() * list.length)];
   }
 
+  var progKey = 'bb_wordle_prog';
+
+  function saveProgress() {
+    if (MODE !== 'daily' || over) return;
+    BB.lsSet(progKey, { day: BB.dayKey(), id: dailyId, guesses: guesses.slice(0, row) });
+  }
+  function clearProgress() { BB.lsSet(progKey, null); }
+
+  // Replay saved guesses onto the board, no animation.
+  function restoreProgress() {
+    var saved = BB.lsGet(progKey, null);
+    if (!saved || saved.day !== BB.dayKey() || saved.id !== dailyId) return false;
+    var list = (saved.guesses || []).filter(function (g) { return g && g.length === LEN; });
+    if (!list.length) return false;
+    list.forEach(function (g, r) {
+      var marks = score(g, answer);
+      for (var i = 0; i < LEN; i++) {
+        var t = document.getElementById('t-' + r + '-' + i);
+        t.textContent = g[i];
+        t.classList.add('filled', marks[i]);
+        var rankOf = { correct: 3, present: 2, absent: 1 };
+        if (!keyState[g[i]] || rankOf[marks[i]] > rankOf[keyState[g[i]]]) keyState[g[i]] = marks[i];
+      }
+      guesses[r] = g;
+    });
+    row = list.length; col = 0;
+    paintKeys();
+    return true;
+  }
+
   function newGame() {
     answer = pickAnswer();
     row = 0; col = 0; over = false; guesses = []; keyState = {};
     buildGrid(); paintKeys();
     msgEl.textContent = '';
+    if (MODE === 'infinite') clearProgress();
   }
 
   function banner(html) { document.getElementById('banner').innerHTML = html; }
@@ -187,6 +218,7 @@
     var cur = guesses[row] || '';
     if (k === 'back') {
       if (!col) return;
+      BB.sfx.back();
       col--;
       guesses[row] = cur.slice(0, -1);
       var t = document.getElementById('t-' + row + '-' + col);
@@ -196,6 +228,7 @@
     if (k === 'enter') return submit();
     if (!/^[a-z]$/.test(k) || col >= LEN) return;
     guesses[row] = cur + k;
+    BB.sfx.type();
     var tile = document.getElementById('t-' + row + '-' + col);
     tile.textContent = k; tile.classList.add('filled');
     col++;
@@ -215,6 +248,7 @@
   }
 
   function bounce(text) {
+    BB.sfx.bad();
     say(text);
     var r = document.getElementById('row-' + row);
     r.classList.add('shake');
@@ -230,7 +264,10 @@
     var rankOf = { correct: 3, present: 2, absent: 1 };
     marks.forEach(function (m, i) {
       var t = document.getElementById('t-' + row + '-' + i);
-      setTimeout(function () { t.classList.add('flip'); setTimeout(function () { t.classList.add(m); }, 250); }, i * 150);
+      setTimeout(function () {
+        t.classList.add('flip');
+        setTimeout(function () { t.classList.add(m); BB.sfx.tick(); }, 250);
+      }, i * 150);
       var ch = word[i];
       if (!keyState[ch] || rankOf[m] > rankOf[keyState[ch]]) keyState[ch] = m;
     });
@@ -239,6 +276,7 @@
     var won = marks.every(function (m) { return m === 'correct'; });
     var lastRow = row;
     row++; col = 0;
+    saveProgress();
 
     if (won) {
       over = true;
@@ -246,23 +284,68 @@
         for (var i = 0; i < LEN; i++) {
           (function (i) { setTimeout(function () { document.getElementById('t-' + lastRow + '-' + i).classList.add('win'); }, i * 85); })(i);
         }
+        BB.sfx.win();
         end(true, lastRow + 1);
       }, LEN * 150 + 340);
     } else if (row >= ROWS) {
       over = true;
-      setTimeout(function () { end(false, 0); }, LEN * 150 + 340);
+      setTimeout(function () { BB.sfx.lose(); end(false, 0); }, LEN * 150 + 340);
     }
+  }
+
+  /* Guess breakdown. For the daily that is everyone's results; otherwise
+     it is your own record. */
+  function distributionHtml(shared, yourTries) {
+    var counts, total, label;
+    if (shared) {
+      counts = shared.t.slice();
+      total = counts.reduce(function (a, b) { return a + b; }, 0) + shared.fail;
+      label = 'How everyone did today';
+    } else {
+      counts = store.dist.slice();
+      total = counts.reduce(function (a, b) { return a + b; }, 0);
+      label = 'Your guesses';
+    }
+    if (!total) return '';
+    var max = Math.max.apply(null, counts.concat([1]));
+    var rows = counts.map(function (n, i) {
+      var pct = Math.round((n / total) * 100);
+      var mine = yourTries === i + 1;
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:.78rem">' +
+        '<span class="muted" style="width:9px;font-weight:700">' + (i + 1) + '</span>' +
+        '<div style="flex:1;background:var(--surface-2);border-radius:3px;overflow:hidden">' +
+          '<div style="width:' + Math.max(n ? 9 : 0, (n / max) * 100) + '%;height:17px;border-radius:3px;' +
+          'background:' + (mine ? 'var(--green)' : 'var(--border-mid)') + ';transition:width .7s var(--ease)"></div>' +
+        '</div>' +
+        '<b style="width:34px;text-align:right">' + pct + '%</b></div>';
+    }).join('');
+
+    var youLine = '';
+    if (shared && yourTries) {
+      var same = counts[yourTries - 1];
+      var pctSame = Math.round((same / total) * 100);
+      youLine = '<p class="muted" style="font-size:.82rem;margin-top:9px">' +
+        pctSame + '% of players also got it in ' + yourTries + '.</p>';
+    }
+
+    return '<div class="mt-3" style="text-align:left">' +
+      '<div class="kicker" style="margin-bottom:8px">' + label + '</div>' +
+      '<div style="display:grid;gap:5px">' + rows + '</div>' +
+      '<p class="muted" style="font-size:.76rem;margin-top:8px">' + total + ' played' +
+      (shared && shared.fail ? ' · ' + Math.round((shared.fail / total) * 100) + '% missed it' : '') + '</p>' +
+      youLine + '</div>';
   }
 
   async function end(won, tries) {
     store.played++;
-    if (won) { store.won++; store.streak++; } else { store.streak = 0; }
+    if (won) { store.won++; store.streak++; store.dist[tries - 1]++; } else { store.streak = 0; }
     BB.lsSet('bb_wordle', store);
     BB.setStat('st-streak', store.streak);
     BB.setStat('st-played', store.played);
     BB.setStat('st-rate', Math.round(store.won / store.played * 100) + '%');
 
     if (MODE === 'daily') {
+      clearProgress();
       BB.saveDaily(dailyId, { won: won, tries: tries, answer: answer, guesses: guesses.slice(0, won ? tries : ROWS) });
       banner('<div class="daily-banner">' +
         '<b>' + (won ? 'Solved in ' + tries : 'Missed it') + '</b>' +
@@ -275,12 +358,27 @@
     var res = won ? await BB.finish(KEY, store.streak, { tries: tries, len: LEN, mode: MODE }) : { newBest: false };
     BB.setStat('st-best', BB.bestFor(KEY) !== undefined ? BB.bestFor(KEY) : store.streak);
 
+    // How everyone else did on the same daily puzzle.
+    var shared = null;
+    if (MODE === 'daily') {
+      var key = 'wordle:' + LEN + ':' + BB.puzzleNumber();
+      try {
+        var sent = await BB.api('/api/daily-result', {
+          method: 'POST', body: JSON.stringify({ key: key, tries: won ? tries : 0 })
+        });
+        shared = sent.stats;
+      } catch (e) {
+        try { shared = (await BB.api('/api/daily-stats/' + key)).stats; } catch (e2) {}
+      }
+    }
+
     BB.resultPanel({
       game: KEY,
       title: won ? 'Solved in ' + tries : 'Out of guesses',
       value: won ? store.streak + ' 🔥' : answer.toUpperCase(),
       sub: won ? 'Streak of ' + store.streak + '.' : 'The word was <b>' + answer.toUpperCase() + '</b>.',
       isBest: res.newBest,
+      extraHtml: distributionHtml(shared, won ? tries : 0),
       againLabel: MODE === 'daily' ? 'Play endless' : 'Next word',
       onAgain: function () {
         if (MODE === 'daily') location.href = '?mode=infinite&len=' + LEN;
@@ -323,9 +421,11 @@
     var done = BB.dailyResult(dailyId);
     if (done) lockDaily(done);
     else {
+      var resumed = restoreProgress();
       banner('<div class="daily-banner">' +
         '<b>Daily puzzle #' + BB.puzzleNumber() + '</b>' +
         '<span class="muted">' + LEN + ' letters · same word for everyone today</span>' +
+        (resumed ? '<span style="margin-left:auto" class="muted">Picked up where you left off</span>' : '') +
         '</div>');
     }
   }

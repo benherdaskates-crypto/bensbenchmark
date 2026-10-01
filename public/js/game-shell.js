@@ -55,7 +55,7 @@
         (opts.sub ? '<p class="muted mt-1" style="font-size:.92rem">' + opts.sub + '</p>' : '') +
         (opts.extraHtml || '') +
         '<div class="row-between mt-3" style="font-size:.86rem;padding:10px 13px;background:var(--surface-2);border-radius:6px">' +
-          '<span class="muted">Your best</span><b>' + (best !== undefined ? g.fmt(best) : '—') + '</b></div>' +
+          '<span class="muted"><span class="crown">👑</span>Your best</span><b>' + (best !== undefined ? g.fmt(best) : '—') + '</b></div>' +
         (BB.user ? '' :
           '<div class="hint">Saved on this device. <a href="/login?next=' + encodeURIComponent(location.pathname + location.search) +
           '" style="text-decoration:underline">Sign in</a> for the leaderboard.</div>') +

@@ -1,8 +1,8 @@
 # BensBenchmark
 
-Nine games: Wordle, Connections, Hangman and six speed and memory tests. Daily puzzles
-and endless ones, party codes for head-to-head races, username-only accounts, remembered
-devices, leaderboards, a live player count, and a request form that emails you.
+Wordle, Connections, Hangman and six speed and memory tests. Daily puzzles and endless
+ones, party codes for head-to-head races, username-only accounts, remembered devices,
+leaderboards and a request form that emails you.
 
 ## Run it
 

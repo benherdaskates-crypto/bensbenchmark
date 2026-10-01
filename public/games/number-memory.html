@@ -97,6 +97,7 @@
   async function check() {
     var given = document.getElementById('ans').value;
     if (given === number) {
+      BB.sfx.good();
       level++;
       stage.innerHTML = '<div><div class="digits" style="color:var(--good)">Correct</div>' +
         '<p class="muted mt-2">' + level + ' digits next.</p></div>';
@@ -104,6 +105,7 @@
       return;
     }
 
+    BB.sfx.lose();
     var score = level - 1;
     var compare = number.split('').map(function (d, i) {
       return '<i class="' + (given[i] === d ? 'ok' : 'no') + '">' + d + '</i>';
