@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aim Trainer — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23d14343'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='white'>A</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .arena {
+    position: relative;
+    height: min(62vh, 460px);
+    border-radius: var(--radius);
+    background:
+      radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--tile) 7%, transparent), transparent 55%),
+      var(--surface-2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    cursor: crosshair;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .target {
+    position: absolute;
+    width: 46px; height: 46px;
+    margin: -23px 0 0 -23px;
+    border-radius: 50%;
+    background: var(--tile);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--tile) 22%, transparent);
+    cursor: pointer;
+    animation: tIn .16s var(--ease);
+    display: grid; place-items: center;
+  }
+  .target::after {
+    content: "";
+    width: 15px; height: 15px;
+    border-radius: 50%;
+    background: var(--surface);
+  }
+  @keyframes tIn { from { transform: scale(.35); opacity: 0; } to { transform: none; opacity: 1; } }
+  .target.pop { animation: tPop .22s var(--ease) forwards; pointer-events: none; }
+  @keyframes tPop { to { transform: scale(1.8); opacity: 0; } }
+  .arena-msg {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    text-align: center;
+    padding: 26px;
+    z-index: 2;
+  }
+  .arena-msg h2 { font-family: var(--font-display); font-weight: 600; font-size: clamp(1.3rem, 4vw, 1.8rem); }
+  .arena-msg p { margin-top: 8px; color: var(--text-2); font-size: .93rem; max-width: 38ch; }
+</style>
+</head>
+<body>
+<main>
+  <section class="game-shell">
+    <div class="wrap" style="max-width:760px" id="mount"></div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/game-shell.js"></script>
+<script>
+(function () {
+  var KEY = 'aim';
+  var TARGETS = 30;
+  var hits = 0, misses = 0, startTime = 0, running = false, splits = [], lastAt = 0;
+
+  document.getElementById('mount').innerHTML =
+    BB.gameHead(KEY, '<button class="btn btn-ghost btn-sm" id="restart">Restart</button>') +
+    '<div class="stat-row">' + BB.statRow([
+      { id: 'st-left', label: 'Remaining', value: TARGETS, hl: true },
+      { id: 'st-avg', label: 'Per target', value: '—' },
+      { id: 'st-miss', label: 'Misses', value: 0 },
+      { id: 'st-best', label: 'Best', value: '—' }
+    ]) + '</div>' +
+    '<div class="board-area">' +
+      '<div class="arena" id="arena">' +
+        '<div class="arena-msg" id="intro"><div>' +
+          '<h2>Hit ' + TARGETS + ' targets</h2>' +
+          '<p>Click each circle the moment it appears. Score is the average time per target.</p>' +
+          '<button class="btn mt-3" id="begin">Start</button>' +
+        '</div></div>' +
+      '</div>' +
+    '</div>';
+
+  var arena = document.getElementById('arena');
+  var intro = document.getElementById('intro');
+
+  function place() {
+    var pad = 34;
+    var w = arena.clientWidth, h = arena.clientHeight;
+    var t = document.createElement('div');
+    t.className = 'target';
+    t.style.left = (pad + Math.random() * (w - pad * 2)) + 'px';
+    t.style.top = (pad + Math.random() * (h - pad * 2)) + 'px';
+    t.addEventListener('mousedown', onHit);
+    t.addEventListener('touchstart', onHit, { passive: false });
+    arena.appendChild(t);
+  }
+
+  function onHit(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var el = e.currentTarget;
+    if (el.classList.contains('pop')) return;
+    el.classList.add('pop');
+    setTimeout(function () { el.remove(); }, 230);
+
+    var now = performance.now();
+    if (!running) { running = true; startTime = now; lastAt = now; }
+    else { splits.push(Math.round(now - lastAt)); lastAt = now; }
+
+    hits++;
+    BB.setStat('st-left', Math.max(0, TARGETS - hits));
+    if (hits > 1) BB.setStat('st-avg', Math.round((now - startTime) / (hits - 1)) + ' ms');
+
+    if (hits >= TARGETS) return end();
+    place();
+  }
+
+  arena.addEventListener('mousedown', function () {
+    if (!running) return;
+    misses++;
+    BB.setStat('st-miss', misses);
+  });
+
+  async function end() {
+    var total = performance.now() - startTime;
+    var avg = Math.round(total / (TARGETS - 1));
+    running = false;
+    var res = await BB.finish(KEY, avg, { misses: misses });
+    BB.setStat('st-best', BB.bestFor(KEY) + ' ms');
+
+    var acc = Math.round(hits / (hits + misses) * 100);
+    var grade = avg < 400 ? 'Very quick.'
+      : avg < 550 ? 'Fast.'
+      : avg < 750 ? 'About average.'
+      : 'Move the whole arm, not just the wrist.';
+
+    intro.innerHTML = '<div><h2>' + avg + ' ms per target</h2><p>' + grade + '</p>' +
+      '<button class="btn mt-3" id="begin">Go again</button></div>';
+    intro.style.display = '';
+    document.getElementById('begin').addEventListener('click', restart);
+
+    BB.resultPanel({
+      game: KEY,
+      title: 'Average per target',
+      value: avg + ' <span style="font-size:1.1rem;font-weight:600">ms</span>',
+      sub: grade,
+      isBest: res.newBest,
+      extraHtml: '<div class="stat-row mt-3" style="margin-bottom:0">' + BB.statRow([
+        { id: 'r-total', label: 'Total time', value: (total / 1000).toFixed(1) + 's' },
+        { id: 'r-acc', label: 'Accuracy', value: acc + '%' },
+        { id: 'r-fast', label: 'Fastest', value: (splits.length ? Math.min.apply(null, splits) : avg) + ' ms' }
+      ]) + '</div>',
+      onAgain: restart
+    });
+  }
+
+  function restart() {
+    arena.querySelectorAll('.target').forEach(function (t) { t.remove(); });
+    hits = 0; misses = 0; splits = []; running = false;
+    BB.setStat('st-left', TARGETS);
+    BB.setStat('st-avg', '—');
+    BB.setStat('st-miss', 0);
+    intro.innerHTML = '<div><h2>Hit ' + TARGETS + ' targets</h2>' +
+      '<p>Click each circle the moment it appears. Score is the average time per target.</p>' +
+      '<button class="btn mt-3" id="begin">Start</button></div>';
+    intro.style.display = '';
+    document.getElementById('begin').addEventListener('click', begin);
+  }
+
+  function begin() {
+    intro.style.display = 'none';
+    place();
+  }
+
+  document.getElementById('begin').addEventListener('click', begin);
+  document.getElementById('restart').addEventListener('click', restart);
+
+  BB.gameInit(KEY, 'mount', null, function () {
+    var b = BB.bestFor(KEY);
+    BB.setStat('st-best', b !== undefined ? b + ' ms' : '—');
+  });
+})();
+</script>
+</body>
+</html>

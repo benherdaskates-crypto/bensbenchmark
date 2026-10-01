@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Typing Speed — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232a86c9'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='white'>T</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .typebox {
+    position: relative;
+    font-family: var(--font-mono);
+    font-size: clamp(1.05rem, 2.7vw, 1.3rem);
+    line-height: 2.05;
+    height: 6.15em;
+    overflow: hidden;
+    cursor: text;
+    user-select: none;
+  }
+  .typebox .scroller { transition: transform .28s var(--ease); }
+  .tw { display: inline-block; margin-right: .55ch; padding: 0 .1ch; border-radius: 4px; transition: color .12s, background .18s; }
+  .tw .tc { color: var(--muted); transition: color .1s; }
+  .tw .tc.ok { color: var(--text); }
+  .tw .tc.bad { color: var(--bad); background: var(--bad-soft); border-radius: 3px; }
+  .tw .tc.extra { color: var(--bad); opacity: .65; text-decoration: line-through; }
+  .tw.active { background: color-mix(in srgb, var(--accent) 11%, transparent); }
+  .caret {
+    position: absolute;
+    width: 2px;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: left .07s linear, top .12s var(--ease);
+    animation: blink 1.1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .typing .caret { animation: none; }
+  .hidden-input { position: absolute; opacity: 0; pointer-events: none; left: -9999px; }
+  .timebar { height: 4px; background: var(--surface-2); border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
+  .timebar i { display: block; height: 100%; width: 100%; background: var(--accent); border-radius: 4px; transition: width 1s linear; }
+  .overlay {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--surface) 78%, transparent);
+    backdrop-filter: blur(2px);
+    border-radius: 10px;
+    font-size: .95rem;
+    font-weight: 600;
+    color: var(--text-2);
+    z-index: 3;
+  }
+  .lenpick { display: flex; gap: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <section class="game-shell">
+    <div class="wrap" style="max-width:720px" id="mount"></div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/data.js"></script>
+<script src="/js/game-shell.js"></script>
+<script>
+(function () {
+  var KEY = 'typing';
+  var DURATIONS = [15, 30, 60];
+  var urlDur = Number(new URLSearchParams(location.search).get('dur'));
+  var duration = DURATIONS.indexOf(urlDur) > -1 ? urlDur : BB.lsGet('bb_type_dur', 60);
+
+  var words = [], typed = [], wi = 0, ci = 0;
+  var running = false, done = false, startTime = 0, timerId = null, tickId = null;
+  var keystrokes = 0, errors = 0;
+
+  document.getElementById('mount').innerHTML =
+    BB.gameHead(KEY,
+      '<div class="tabs lenpick" id="lenpick">' +
+        DURATIONS.map(function (d) { return '<button data-d="' + d + '"' + (d === duration ? ' class="on"' : '') + '>' + d + 's</button>'; }).join('') +
+      '</div>' +
+      '<button class="btn btn-ghost btn-sm" id="restart">Restart</button>') +
+    '<div class="stat-row">' + BB.statRow([
+      { id: 'st-wpm', label: 'WPM', value: 0, hl: true },
+      { id: 'st-acc', label: 'Accuracy', value: '100%' },
+      { id: 'st-time', label: 'Time left', value: duration + 's' },
+      { id: 'st-best', label: 'Best WPM', value: '—' }
+    ]) + '</div>' +
+    '<div class="board-area">' +
+      '<div class="timebar"><i id="timefill"></i></div>' +
+      '<div class="typebox" id="typebox">' +
+        '<div class="scroller" id="scroller"></div>' +
+        '<div class="caret" id="caret" style="display:none"></div>' +
+        '<div class="overlay" id="overlay">Click here and type to start</div>' +
+      '</div>' +
+      '<input class="hidden-input" id="sink" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Typing test input">' +
+      '<p class="msg-line muted" style="font-weight:500;font-size:.85rem">Space for the next word.</p>' +
+    '</div>';
+
+  var scroller = document.getElementById('scroller');
+  var caret = document.getElementById('caret');
+  var box = document.getElementById('typebox');
+  var sink = document.getElementById('sink');
+  var overlay = document.getElementById('overlay');
+
+  function pickWords(n) {
+    var pool = BBDATA.TYPING_WORDS, out = [];
+    for (var i = 0; i < n; i++) out.push(pool[Math.floor(Math.random() * pool.length)]);
+    return out;
+  }
+
+  function reset() {
+    clearInterval(timerId); clearInterval(tickId);
+    words = pickWords(220);
+    typed = ['']; wi = 0; ci = 0;
+    running = false; done = false;
+    keystrokes = 0; errors = 0;
+    box.classList.remove('typing');
+    overlay.style.display = '';
+    caret.style.display = 'none';
+    scroller.style.transform = 'translateY(0)';
+    BB.setStat('st-wpm', 0);
+    BB.setStat('st-acc', '100%');
+    BB.setStat('st-time', duration + 's');
+    document.getElementById('timefill').style.transition = 'none';
+    document.getElementById('timefill').style.width = '100%';
+    render();
+  }
+
+  function render() {
+    scroller.innerHTML = words.map(function (w, i) {
+      var t = typed[i] || '';
+      var chars = '';
+      for (var c = 0; c < w.length; c++) {
+        var cls = 'tc';
+        if (c < t.length) cls += t[c] === w[c] ? ' ok' : ' bad';
+        chars += '<span class="' + cls + '">' + w[c] + '</span>';
+      }
+      for (var e = w.length; e < t.length; e++) chars += '<span class="tc extra">' + t[e] + '</span>';
+      return '<span class="tw' + (i === wi ? ' active' : '') + '" id="w-' + i + '">' + chars + '</span>';
+    }).join('');
+    moveCaret();
+  }
+
+  function moveCaret() {
+    var wEl = document.getElementById('w-' + wi);
+    if (!wEl) return;
+    var spans = wEl.querySelectorAll('.tc');
+    var target = spans[Math.min(ci, spans.length - 1)];
+    var bRect = box.getBoundingClientRect();
+    var r = target ? target.getBoundingClientRect() : wEl.getBoundingClientRect();
+    var atEnd = ci >= spans.length;
+    caret.style.display = '';
+    caret.style.left = ((atEnd ? r.right : r.left) - bRect.left) + 'px';
+    caret.style.top = (r.top - bRect.top + 3) + 'px';
+    caret.style.height = (r.height - 6) + 'px';
+
+    // Keep the active line vertically centred by scrolling whole lines.
+    var lineH = r.height;
+    var offsetTop = wEl.offsetTop;
+    var line = Math.round(offsetTop / lineH);
+    var shift = Math.max(0, line - 1) * lineH;
+    scroller.style.transform = 'translateY(' + -shift + 'px)';
+  }
+
+  function start() {
+    if (running || done) return;
+    running = true;
+    startTime = Date.now();
+    overlay.style.display = 'none';
+    box.classList.add('typing');
+    var fill = document.getElementById('timefill');
+    fill.style.transition = 'width ' + duration + 's linear';
+    requestAnimationFrame(function () { fill.style.width = '0%'; });
+    tickId = setInterval(tick, 180);
+    timerId = setTimeout(finish, duration * 1000);
+  }
+
+  function elapsed() { return (Date.now() - startTime) / 1000; }
+
+  function stats() {
+    var correctChars = 0, totalChars = 0;
+    for (var i = 0; i <= wi && i < words.length; i++) {
+      var t = typed[i] || '', w = words[i];
+      if (!t) continue;
+      for (var c = 0; c < t.length; c++) {
+        totalChars++;
+        if (t[c] === w[c]) correctChars++;
+      }
+      if (i < wi) { totalChars++; correctChars++; } // the space between words
+    }
+    var mins = Math.max(elapsed() / 60, 1 / 60);
+    return {
+      wpm: Math.max(0, Math.round((correctChars / 5) / mins)),
+      raw: Math.max(0, Math.round((totalChars / 5) / mins)),
+      acc: keystrokes ? Math.max(0, Math.round((keystrokes - errors) / keystrokes * 100)) : 100
+    };
+  }
+
+  function tick() {
+    var s = stats();
+    BB.setStat('st-wpm', s.wpm);
+    BB.setStat('st-acc', s.acc + '%');
+    BB.setStat('st-time', Math.max(0, Math.ceil(duration - elapsed())) + 's');
+  }
+
+  async function finish() {
+    if (done) return;
+    done = true; running = false;
+    clearInterval(tickId); clearTimeout(timerId);
+    caret.style.display = 'none';
+    BB.setStat('st-time', '0s');
+    var s = stats();
+    BB.setStat('st-wpm', s.wpm);
+    BB.setStat('st-acc', s.acc + '%');
+
+    var res = await BB.finish(KEY, s.wpm, { acc: s.acc, dur: duration });
+    BB.setStat('st-best', BB.bestFor(KEY));
+
+    var grade = s.wpm >= 90 ? 'Seriously fast.'
+      : s.wpm >= 70 ? 'Touch-typist quick.'
+      : s.wpm >= 50 ? 'Above average.'
+      : s.wpm >= 35 ? 'About average. Accuracy first, then speed.'
+      : 'Keep your fingers on the home row.';
+
+    BB.resultPanel({
+      game: KEY,
+      title: duration + ' second test',
+      value: s.wpm + ' <span style="font-size:1.1rem;font-weight:600">wpm</span>',
+      sub: grade,
+      isBest: res.newBest,
+      extraHtml: '<div class="stat-row mt-3" style="margin-bottom:0">' + BB.statRow([
+        { id: 'r-acc', label: 'Accuracy', value: s.acc + '%' },
+        { id: 'r-raw', label: 'Raw WPM', value: s.raw },
+        { id: 'r-words', label: 'Words', value: wi }
+      ]) + '</div>',
+      onAgain: reset
+    });
+  }
+
+  /* ---------- input handling ---------- */
+  function onKey(e) {
+    if (done || document.querySelector('.modal-back')) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+
+    if (k === 'Backspace') {
+      e.preventDefault();
+      if (ci > 0) { typed[wi] = typed[wi].slice(0, -1); ci--; }
+      else if (wi > 0) { wi--; typed[wi] = typed[wi] || ''; ci = typed[wi].length; }
+      render();
+      return;
+    }
+    if (k === ' ') {
+      e.preventDefault();
+      if (!running) start();
+      if (ci === 0) return;
+      keystrokes++;
+      wi++; ci = 0;
+      if (typed[wi] === undefined) typed[wi] = '';
+      if (wi >= words.length - 20) { words = words.concat(pickWords(80)); }
+      render();
+      return;
+    }
+    if (k.length !== 1 || !/[\x20-\x7E]/.test(k)) return;
+    e.preventDefault();
+    if (!running) start();
+    keystrokes++;
+    if (words[wi][ci] !== k) errors++;
+    typed[wi] = (typed[wi] || '') + k;
+    ci++;
+    render();
+  }
+
+  document.addEventListener('keydown', onKey);
+  box.addEventListener('click', function () { sink.focus(); });
+  window.addEventListener('resize', moveCaret);
+
+  document.getElementById('restart').addEventListener('click', reset);
+  document.getElementById('lenpick').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    duration = Number(b.getAttribute('data-d'));
+    BB.lsSet('bb_type_dur', duration);
+    this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    reset();
+  });
+
+  reset();
+  BB.gameInit(KEY, 'mount', null, function () {
+    var b = BB.bestFor(KEY);
+    BB.setStat('st-best', b !== undefined ? b : 0);
+  });
+})();
+</script>
+</body>
+</html>

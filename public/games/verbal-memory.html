@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verbal Memory — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23b0357f'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='white'>V</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .stage { min-height: 300px; display: grid; place-items: center; text-align: center; padding: 24px 12px; }
+  .word {
+    font-family: var(--font-display);
+    font-size: clamp(2.1rem, 9vw, 3.4rem);
+    font-weight: 600;
+    letter-spacing: -.03em;
+    animation: wIn .24s var(--ease);
+  }
+  @keyframes wIn { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+  .choices { display: flex; gap: 12px; justify-content: center; margin-top: 30px; flex-wrap: wrap; }
+  .choices .btn { min-width: 132px; }
+  .hearts { display: flex; gap: 7px; justify-content: center; align-items: center; margin-top: 18px; }
+  .heart { font-size: 1.05rem; transition: transform .3s var(--ease), filter .3s, opacity .3s; }
+  .heart.gone { filter: grayscale(1); opacity: .32; transform: scale(.8); }
+  .flashmsg { font-weight: 700; font-size: .95rem; min-height: 22px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <section class="game-shell">
+    <div class="wrap" style="max-width:600px" id="mount"></div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/data.js"></script>
+<script src="/js/game-shell.js"></script>
+<script>
+(function () {
+  var KEY = 'verbal';
+  var LIVES = 3;
+  var seen, pool, current, score, lives, over;
+
+  document.getElementById('mount').innerHTML =
+    BB.gameHead(KEY, '<button class="btn btn-ghost btn-sm" id="restart">Restart</button>') +
+    '<div class="stat-row">' + BB.statRow([
+      { id: 'st-score', label: 'Score', value: 0, hl: true },
+      { id: 'st-seen', label: 'Words seen', value: 0 },
+      { id: 'st-best', label: 'Best', value: '—' }
+    ]) + '</div>' +
+    '<div class="board-area"><div class="stage" id="stage"></div>' +
+      '<div class="hearts" id="hearts"></div></div>';
+
+  var stage = document.getElementById('stage');
+
+  function intro() {
+    stage.innerHTML = '<div>' +
+      '<h2 style="font-family:var(--font-display);font-weight:600;font-size:1.6rem">Verbal memory</h2>' +
+      '<p class="muted mt-2" style="font-size:.94rem;max-width:42ch;margin-inline:auto">' +
+      'Words appear one at a time. Say whether you have already seen it in this run, or whether it is brand new. ' +
+      'Three wrong answers ends the game.</p>' +
+      '<button class="btn mt-3" id="go">Start</button></div>';
+    document.getElementById('go').addEventListener('click', start);
+    document.getElementById('hearts').innerHTML = '';
+  }
+
+  function paintHearts() {
+    document.getElementById('hearts').innerHTML =
+      '<span class="muted" style="font-size:.8rem;margin-right:5px">Lives</span>' +
+      Array.from({ length: LIVES }, function (_, i) {
+        return '<span class="heart' + (i >= lives ? ' gone' : '') + '">❤️</span>';
+      }).join('');
+  }
+
+  function start() {
+    seen = new Set();
+    pool = BBDATA.VERBAL_WORDS.slice();
+    score = 0; lives = LIVES; over = false;
+    BB.setStat('st-score', 0);
+    BB.setStat('st-seen', 0);
+    paintHearts();
+    nextWord();
+  }
+
+  function nextWord() {
+    var arr = Array.from(seen);
+    // Roughly 45% repeats once enough words are in play.
+    var repeat = arr.length >= 3 && Math.random() < 0.45;
+    if (repeat) current = arr[Math.floor(Math.random() * arr.length)];
+    else {
+      var fresh = pool.filter(function (w) { return !seen.has(w); });
+      if (!fresh.length) { current = arr[Math.floor(Math.random() * arr.length)]; repeat = true; }
+      else current = fresh[Math.floor(Math.random() * fresh.length)];
+    }
+    render('');
+  }
+
+  function render(flash) {
+    stage.innerHTML = '<div>' +
+      '<div class="word">' + current + '</div>' +
+      '<div class="choices">' +
+        '<button class="btn btn-ghost" id="btn-seen">Seen</button>' +
+        '<button class="btn btn-ghost" id="btn-new">New</button>' +
+      '</div>' +
+      '<div class="flashmsg" id="flash">' + (flash || '') + '</div></div>';
+    document.getElementById('btn-seen').addEventListener('click', function () { answer(true); });
+    document.getElementById('btn-new').addEventListener('click', function () { answer(false); });
+  }
+
+  function answer(saidSeen) {
+    if (over) return;
+    var wasSeen = seen.has(current);
+    var right = saidSeen === wasSeen;
+    seen.add(current);
+
+    if (right) {
+      score++;
+      BB.setStat('st-score', score);
+      BB.setStat('st-seen', seen.size);
+      nextWord();
+      var f = document.getElementById('flash');
+      if (f) { f.textContent = 'Correct'; f.style.color = 'var(--good)'; }
+    } else {
+      lives--;
+      paintHearts();
+      BB.setStat('st-seen', seen.size);
+      if (lives <= 0) return end();
+      nextWord();
+      var f2 = document.getElementById('flash');
+      if (f2) {
+        f2.textContent = wasSeen ? 'You had already seen that one' : 'That one was new';
+        f2.style.color = 'var(--bad)';
+      }
+    }
+  }
+
+  async function end() {
+    over = true;
+    var res = await BB.finish(KEY, score, { seen: seen.size });
+    BB.setStat('st-best', BB.bestFor(KEY));
+    stage.innerHTML = '<div>' +
+      '<div class="word" style="font-size:2.4rem">Out of lives</div>' +
+      '<p class="muted mt-2">You tracked ' + score + ' word' + (score === 1 ? '' : 's') + '.</p>' +
+      '<button class="btn mt-3" id="go">Play again</button></div>';
+    document.getElementById('go').addEventListener('click', start);
+    BB.resultPanel({
+      game: KEY,
+      title: 'Words tracked',
+      value: score,
+      sub: score >= 70 ? 'Remarkable recall.'
+        : score >= 45 ? 'Well above average.'
+        : score >= 28 ? 'About average.'
+        : 'Picture each new word. It sticks better.',
+      isBest: res.newBest,
+      onAgain: start
+    });
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (over || document.querySelector('.modal-back')) return;
+    if (!document.getElementById('btn-seen')) return;
+    if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 's') { e.preventDefault(); answer(true); }
+    if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'n') { e.preventDefault(); answer(false); }
+  });
+
+  document.getElementById('restart').addEventListener('click', intro);
+
+  intro();
+  BB.gameInit(KEY, 'mount', null, function () {
+    var b = BB.bestFor(KEY);
+    BB.setStat('st-best', b !== undefined ? b : 0);
+  });
+})();
+</script>
+</body>
+</html>

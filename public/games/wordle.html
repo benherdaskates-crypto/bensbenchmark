@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wordle — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%236aaa64'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='Helvetica,sans-serif' font-weight='bold' fill='white'>W</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .grid { display: grid; gap: 5px; width: min(330px, 84vw); margin: 0 auto; }
+  .grow { display: grid; grid-template-columns: repeat(var(--cols, 5), 1fr); gap: 5px; }
+  .tile {
+    aspect-ratio: 1; display: grid; place-items: center;
+    font-size: clamp(1.3rem, 6vw, 1.9rem); font-weight: 700; text-transform: uppercase;
+    border: 2px solid var(--border); border-radius: 4px;
+    background: var(--surface); color: var(--text);
+    user-select: none;
+  }
+  .tile.filled { border-color: var(--border-mid); animation: pop .12s var(--ease); }
+  @keyframes pop { 50% { transform: scale(1.09); } }
+  .tile.flip { animation: flip .55s ease forwards; }
+  @keyframes flip { 0% { transform: rotateX(0); } 45%,55% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+  .tile.correct { background: var(--green); border-color: var(--green); color: #fff; }
+  .tile.present { background: var(--yellow); border-color: var(--yellow); color: #fff; }
+  .tile.absent { background: var(--grey); border-color: var(--grey); color: #fff; }
+  .grow.shake { animation: shake .42s var(--ease-soft); }
+  @keyframes shake { 20%,60% { transform: translateX(-7px); } 40%,80% { transform: translateX(7px); } }
+  .tile.win { animation: jump .55s var(--ease); }
+  @keyframes jump { 0%,100% { transform: translateY(0); } 30% { transform: translateY(-20px); } 60% { transform: translateY(3px); } }
+</style>
+</head>
+<body>
+<main>
+  <section class="game-shell">
+    <div class="wrap" style="max-width:520px" id="mount"></div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/data.js"></script>
+<script src="/js/words.js"></script>
+<script src="/js/game-shell.js"></script>
+<script>
+(function () {
+  var KEY = 'wordle';
+  var P = new URLSearchParams(location.search);
+  var LEN = [3, 4, 5, 6].indexOf(Number(P.get('len'))) > -1 ? Number(P.get('len')) : 5;
+  var MODE = P.get('mode') === 'infinite' ? 'infinite' : 'daily';
+  var ROWS = 6;
+
+  var store = BB.lsGet('bb_wordle', { streak: 0, played: 0, won: 0 });
+  var answer = '', row = 0, col = 0, over = false, guesses = [], keyState = {};
+  var dailyId = KEY + ':' + LEN;
+  var cdTimer = null;
+
+  document.getElementById('mount').innerHTML =
+    BB.gameHead(KEY, '<button class="btn btn-ghost btn-sm" id="how"><span>How to play</span></button>' +
+      (MODE === 'infinite' ? '<button class="btn btn-ghost btn-sm" id="newgame"><span>New word</span></button>' : '')) +
+    '<div class="mode-bar">' +
+      '<span class="lbl">Mode</span>' +
+      '<div class="chips">' +
+        '<a class="chip' + (MODE === 'daily' ? ' on' : '') + '" href="?mode=daily&len=' + LEN + '">Daily</a>' +
+        '<a class="chip' + (MODE === 'infinite' ? ' on' : '') + '" href="?mode=infinite&len=' + LEN + '">Endless</a>' +
+      '</div>' +
+      '<span class="sep"></span>' +
+      '<span class="lbl">Letters</span>' +
+      '<div class="chips">' +
+        [3, 4, 5, 6].map(function (n) {
+          return '<a class="chip' + (n === LEN ? ' on' : '') + '" href="?mode=' + MODE + '&len=' + n + '">' + n + '</a>';
+        }).join('') +
+      '</div>' +
+    '</div>' +
+    '<div id="banner"></div>' +
+    '<div class="stat-row">' + BB.statRow([
+      { id: 'st-streak', label: 'Streak', value: store.streak, hl: true },
+      { id: 'st-best', label: 'Best', value: '—' },
+      { id: 'st-played', label: 'Played', value: store.played },
+      { id: 'st-rate', label: 'Win rate', value: store.played ? Math.round(store.won / store.played * 100) + '%' : '—' }
+    ]) + '</div>' +
+    '<div class="board-area">' +
+      '<div class="grid" id="grid"></div>' +
+      '<p class="msg-line" id="msg"></p>' +
+      '<div class="keyboard" id="kb"></div>' +
+    '</div>';
+
+  var gridEl = document.getElementById('grid');
+  var msgEl = document.getElementById('msg');
+  gridEl.style.setProperty('--cols', LEN);
+
+  function buildGrid() {
+    gridEl.innerHTML = '';
+    for (var r = 0; r < ROWS; r++) {
+      var rowEl = document.createElement('div');
+      rowEl.className = 'grow';
+      rowEl.id = 'row-' + r;
+      for (var c = 0; c < LEN; c++) {
+        var t = document.createElement('div');
+        t.className = 'tile';
+        t.id = 't-' + r + '-' + c;
+        rowEl.appendChild(t);
+      }
+      gridEl.appendChild(rowEl);
+    }
+  }
+
+  var KB = [['q','w','e','r','t','y','u','i','o','p'], ['a','s','d','f','g','h','j','k','l'], ['enter','z','x','c','v','b','n','m','back']];
+  document.getElementById('kb').innerHTML = KB.map(function (r) {
+    return '<div class="krow">' + r.map(function (k) {
+      var wide = k === 'enter' || k === 'back';
+      return '<button class="key' + (wide ? ' wide' : '') + '" data-k="' + k + '">' +
+        (k === 'back' ? '⌫' : k === 'enter' ? 'Enter' : k) + '</button>';
+    }).join('') + '</div>';
+  }).join('');
+  document.getElementById('kb').addEventListener('click', function (e) {
+    var b = e.target.closest('.key');
+    if (b) press(b.getAttribute('data-k'));
+  });
+
+  function paintKeys() {
+    document.querySelectorAll('.key').forEach(function (b) {
+      var s = keyState[b.getAttribute('data-k')];
+      b.classList.remove('correct', 'present', 'absent');
+      if (s) b.classList.add(s);
+    });
+  }
+
+  function pickAnswer() {
+    var list = BBDATA.wordsFor(LEN).answers;
+    if (MODE === 'daily') return BB.dailyPick(list, 'wordle:' + LEN);
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  function newGame() {
+    answer = pickAnswer();
+    row = 0; col = 0; over = false; guesses = []; keyState = {};
+    buildGrid(); paintKeys();
+    msgEl.textContent = '';
+  }
+
+  function banner(html) { document.getElementById('banner').innerHTML = html; }
+
+  function startCountdown() {
+    clearInterval(cdTimer);
+    function paint() {
+      var el = document.getElementById('cd');
+      if (!el) return clearInterval(cdTimer);
+      el.textContent = BB.countdownText(BB.msUntilTomorrow());
+    }
+    paint();
+    cdTimer = setInterval(paint, 1000);
+  }
+
+  function lockDaily(result) {
+    over = true;
+    banner('<div class="daily-banner">' +
+      '<b>' + (result.won ? 'Solved in ' + result.tries : 'Missed it') + '</b>' +
+      '<span class="muted">The word was ' + result.answer.toUpperCase() + '.</span>' +
+      '<span style="margin-left:auto">Next in <span class="countdown-num" id="cd">--:--:--</span></span>' +
+      '</div>');
+    startCountdown();
+    // show the finished board
+    answer = result.answer;
+    buildGrid();
+    (result.guesses || []).forEach(function (g, r) {
+      var marks = score(g, answer);
+      for (var i = 0; i < LEN; i++) {
+        var t = document.getElementById('t-' + r + '-' + i);
+        t.textContent = g[i];
+        t.classList.add('filled', marks[i]);
+        keyState[g[i]] = marks[i];
+      }
+    });
+    paintKeys();
+    msgEl.innerHTML = 'Come back tomorrow, or <a href="?mode=infinite&len=' + LEN + '" style="text-decoration:underline">play endless</a>.';
+  }
+
+  function say(text) {
+    msgEl.textContent = text;
+    setTimeout(function () { if (msgEl.textContent === text) msgEl.textContent = ''; }, 1500);
+  }
+
+  function press(k) {
+    if (over) return;
+    var cur = guesses[row] || '';
+    if (k === 'back') {
+      if (!col) return;
+      col--;
+      guesses[row] = cur.slice(0, -1);
+      var t = document.getElementById('t-' + row + '-' + col);
+      t.textContent = ''; t.classList.remove('filled');
+      return;
+    }
+    if (k === 'enter') return submit();
+    if (!/^[a-z]$/.test(k) || col >= LEN) return;
+    guesses[row] = cur + k;
+    var tile = document.getElementById('t-' + row + '-' + col);
+    tile.textContent = k; tile.classList.add('filled');
+    col++;
+  }
+
+  function score(guess, target) {
+    var marks = new Array(LEN).fill('absent'), pool = {};
+    for (var i = 0; i < LEN; i++) {
+      if (guess[i] === target[i]) marks[i] = 'correct';
+      else pool[target[i]] = (pool[target[i]] || 0) + 1;
+    }
+    for (var j = 0; j < LEN; j++) {
+      if (marks[j] === 'correct') continue;
+      if (pool[guess[j]] > 0) { marks[j] = 'present'; pool[guess[j]]--; }
+    }
+    return marks;
+  }
+
+  function bounce(text) {
+    say(text);
+    var r = document.getElementById('row-' + row);
+    r.classList.add('shake');
+    setTimeout(function () { r.classList.remove('shake'); }, 440);
+  }
+
+  function submit() {
+    var word = guesses[row] || '';
+    if (word.length < LEN) return bounce('Not enough letters');
+    if (!BBDATA.isValidFor(LEN, word)) return bounce('Not a word');
+
+    var marks = score(word, answer);
+    var rankOf = { correct: 3, present: 2, absent: 1 };
+    marks.forEach(function (m, i) {
+      var t = document.getElementById('t-' + row + '-' + i);
+      setTimeout(function () { t.classList.add('flip'); setTimeout(function () { t.classList.add(m); }, 250); }, i * 150);
+      var ch = word[i];
+      if (!keyState[ch] || rankOf[m] > rankOf[keyState[ch]]) keyState[ch] = m;
+    });
+    setTimeout(paintKeys, marks.length * 150 + 280);
+
+    var won = marks.every(function (m) { return m === 'correct'; });
+    var lastRow = row;
+    row++; col = 0;
+
+    if (won) {
+      over = true;
+      setTimeout(function () {
+        for (var i = 0; i < LEN; i++) {
+          (function (i) { setTimeout(function () { document.getElementById('t-' + lastRow + '-' + i).classList.add('win'); }, i * 85); })(i);
+        }
+        end(true, lastRow + 1);
+      }, LEN * 150 + 340);
+    } else if (row >= ROWS) {
+      over = true;
+      setTimeout(function () { end(false, 0); }, LEN * 150 + 340);
+    }
+  }
+
+  async function end(won, tries) {
+    store.played++;
+    if (won) { store.won++; store.streak++; } else { store.streak = 0; }
+    BB.lsSet('bb_wordle', store);
+    BB.setStat('st-streak', store.streak);
+    BB.setStat('st-played', store.played);
+    BB.setStat('st-rate', Math.round(store.won / store.played * 100) + '%');
+
+    if (MODE === 'daily') {
+      BB.saveDaily(dailyId, { won: won, tries: tries, answer: answer, guesses: guesses.slice(0, won ? tries : ROWS) });
+      banner('<div class="daily-banner">' +
+        '<b>' + (won ? 'Solved in ' + tries : 'Missed it') + '</b>' +
+        '<span class="muted">Daily ' + LEN + '-letter puzzle</span>' +
+        '<span style="margin-left:auto">Next in <span class="countdown-num" id="cd">--:--:--</span></span>' +
+        '</div>');
+      startCountdown();
+    }
+
+    var res = won ? await BB.finish(KEY, store.streak, { tries: tries, len: LEN, mode: MODE }) : { newBest: false };
+    BB.setStat('st-best', BB.bestFor(KEY) !== undefined ? BB.bestFor(KEY) : store.streak);
+
+    BB.resultPanel({
+      game: KEY,
+      title: won ? 'Solved in ' + tries : 'Out of guesses',
+      value: won ? store.streak + ' 🔥' : answer.toUpperCase(),
+      sub: won ? 'Streak of ' + store.streak + '.' : 'The word was <b>' + answer.toUpperCase() + '</b>.',
+      isBest: res.newBest,
+      againLabel: MODE === 'daily' ? 'Play endless' : 'Next word',
+      onAgain: function () {
+        if (MODE === 'daily') location.href = '?mode=infinite&len=' + LEN;
+        else newGame();
+      }
+    });
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (document.querySelector('.modal-back')) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'Enter') { e.preventDefault(); press('enter'); }
+    else if (e.key === 'Backspace') { e.preventDefault(); press('back'); }
+    else if (/^[a-zA-Z]$/.test(e.key)) press(e.key.toLowerCase());
+  });
+
+  var ng = document.getElementById('newgame');
+  if (ng) ng.addEventListener('click', function () {
+    if (!over && guesses.length && !confirm('Skip this word? Your streak resets.')) return;
+    if (!over && guesses.length) { store.streak = 0; store.played++; BB.lsSet('bb_wordle', store); BB.setStat('st-streak', 0); }
+    newGame();
+  });
+
+  document.getElementById('how').addEventListener('click', function () {
+    BB.modal('<button class="modal-close" data-close>' + BB.ICON.x + '</button>' +
+      '<h2>How to play</h2>' +
+      '<p class="sub">Guess the word in six tries. Every guess has to be a real word.</p>' +
+      '<div class="mt-3" style="display:grid;gap:10px;font-size:.9rem">' +
+        '<div class="row"><span class="tile correct" style="width:32px;height:32px;aspect-ratio:auto;font-size:.9rem">A</span><span>Right letter, right spot.</span></div>' +
+        '<div class="row"><span class="tile present" style="width:32px;height:32px;aspect-ratio:auto;font-size:.9rem">B</span><span>In the word, wrong spot.</span></div>' +
+        '<div class="row"><span class="tile absent" style="width:32px;height:32px;aspect-ratio:auto;font-size:.9rem">C</span><span>Not in the word.</span></div>' +
+      '</div>' +
+      '<p class="hint mt-3">Daily gives everyone the same word once a day. Endless never stops. Pick 3 to 6 letters either way.</p>' +
+      '<button class="btn btn-block mt-3" data-close><span>Got it</span></button>');
+  });
+
+  newGame();
+
+  if (MODE === 'daily') {
+    var done = BB.dailyResult(dailyId);
+    if (done) lockDaily(done);
+    else {
+      banner('<div class="daily-banner">' +
+        '<b>Daily puzzle #' + BB.puzzleNumber() + '</b>' +
+        '<span class="muted">' + LEN + ' letters · same word for everyone today</span>' +
+        '</div>');
+    }
+  }
+
+  BB.gameInit(KEY, 'mount', null, function () {
+    var b = BB.bestFor(KEY);
+    BB.setStat('st-best', b !== undefined ? b : 0);
+  });
+})();
+</script>
+</body>
+</html>

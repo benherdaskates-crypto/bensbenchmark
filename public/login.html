@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%235b5bd6'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='white'>BB</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main>
+  <section class="section">
+    <div class="wrap" style="max-width:440px">
+
+      <div class="center reveal">
+        <h1 style="font-family:var(--font-display);font-weight:600;font-size:2rem" id="page-title">Welcome back</h1>
+        <p class="muted mt-1" id="page-sub">Username and password. That is it.</p>
+      </div>
+
+      <div class="card mt-3 reveal reveal-scale" style="--d:90ms">
+        <div class="center" style="margin-bottom:22px">
+          <div class="tabs" role="tablist">
+            <button id="tab-login" class="on" type="button">Sign in</button>
+            <button id="tab-register" type="button">Create account</button>
+          </div>
+        </div>
+
+        <div id="msg"></div>
+
+        <form id="auth-form" autocomplete="on">
+          <div class="field">
+            <label for="username">Username</label>
+            <input class="input" id="username" name="username" required minlength="3" maxlength="16"
+                   pattern="[a-zA-Z0-9_]{3,16}" autocomplete="username" autocapitalize="off" spellcheck="false"
+                   placeholder="e.g. ben_h">
+            <div class="hint" id="user-hint">3 to 16 letters, numbers or underscores.</div>
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input class="input" id="password" name="password" type="password" required minlength="4" maxlength="72"
+                   autocomplete="current-password" placeholder="At least 4 characters">
+          </div>
+          <label class="row" style="gap:8px;font-size:.88rem;color:var(--text-2);margin-bottom:18px;cursor:pointer">
+            <input type="checkbox" id="remember" checked>
+            <span>Remember this device</span>
+          </label>
+          <button class="btn btn-block btn-lg" type="submit" id="submit-btn">Sign in</button>
+        </form>
+
+        <p class="hint center mt-2">No email, no reset. Pick something you will remember.</p>
+      </div>
+
+      <p class="center muted mt-3 reveal" style="font-size:.9rem;--d:160ms">
+        Or <a href="/games" style="text-decoration:underline">play as a guest</a>. Scores stay on this device.
+      </p>
+
+    </div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script>
+(function () {
+  var mode = new URLSearchParams(location.search).get('tab') === 'register' ? 'register' : 'login';
+  var next = new URLSearchParams(location.search).get('next') || '/profile';
+
+  var elTitle = document.getElementById('page-title');
+  var elSub = document.getElementById('page-sub');
+  var btn = document.getElementById('submit-btn');
+  var tabL = document.getElementById('tab-login');
+  var tabR = document.getElementById('tab-register');
+  var pw = document.getElementById('password');
+  var msg = document.getElementById('msg');
+
+  function paint() {
+    var reg = mode === 'register';
+    tabL.classList.toggle('on', !reg);
+    tabR.classList.toggle('on', reg);
+    elTitle.textContent = reg ? 'Create your account' : 'Welcome back';
+    elSub.textContent = reg ? 'Pick a username and a password.' : 'Username and password. That is it.';
+    btn.textContent = reg ? 'Create account' : 'Sign in';
+    pw.setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
+    msg.innerHTML = '';
+    history.replaceState(null, '', reg ? '/login?tab=register' : '/login');
+  }
+  tabL.addEventListener('click', function () { mode = 'login'; paint(); });
+  tabR.addEventListener('click', function () { mode = 'register'; paint(); });
+  paint();
+
+  document.getElementById('auth-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var u = document.getElementById('username').value.trim();
+    var p = pw.value;
+    btn.disabled = true;
+    btn.textContent = mode === 'register' ? 'Creating…' : 'Signing in…';
+    try {
+      if (mode === 'register') await BB.register(u, p);
+      else await BB.login(u, p);
+      if (!document.getElementById('remember').checked) {
+        // Session-only: drop the cookie when the tab closes.
+        window.addEventListener('pagehide', function () { navigator.sendBeacon && navigator.sendBeacon('/api/logout'); });
+      }
+      msg.innerHTML = '<div class="notice notice-good">Signed in.</div>';
+      setTimeout(function () { location.href = next; }, 450);
+    } catch (err) {
+      msg.innerHTML = '<div class="notice notice-bad">' + err.message + '</div>';
+      btn.disabled = false;
+      btn.textContent = mode === 'register' ? 'Create account' : 'Sign in';
+    }
+  });
+
+  BB.init({ active: 'login' }).then(function (user) {
+    if (user) location.replace(next);
+  });
+})();
+</script>
+</body>
+</html>

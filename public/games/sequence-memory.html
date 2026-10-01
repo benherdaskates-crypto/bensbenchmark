@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sequence Memory — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23159b9b'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='white'>S</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .pad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    width: min(360px, 84vw);
+    margin: 0 auto;
+  }
+  .cell {
+    aspect-ratio: 1;
+    border-radius: 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform .12s var(--ease), background .18s, box-shadow .18s, border-color .18s;
+  }
+  .cell:hover { border-color: var(--border-mid); }
+  .cell.lit {
+    background: var(--tile);
+    border-color: var(--tile);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--tile) 22%, transparent);
+    transform: scale(1.04);
+  }
+  .cell.good { background: var(--good); border-color: var(--good); }
+  .cell.bad { background: var(--bad); border-color: var(--bad); animation: bshake .4s var(--ease-soft); }
+  @keyframes bshake { 25%, 75% { transform: translateX(-5px); } 50% { transform: translateX(5px); } }
+  .cell.locked { cursor: default; }
+  .stage-note { text-align: center; margin-top: 20px; min-height: 24px; font-weight: 600; font-size: .93rem; color: var(--text-2); }
+  .startpanel { text-align: center; padding: 26px 10px; }
+</style>
+</head>
+<body>
+<main>
+  <section class="game-shell">
+    <div class="wrap" style="max-width:560px" id="mount"></div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/game-shell.js"></script>
+<script>
+(function () {
+  var KEY = 'sequence';
+  var seq = [], input = [], level = 0, playing = false, accepting = false;
+
+  document.getElementById('mount').innerHTML =
+    BB.gameHead(KEY, '<button class="btn btn-ghost btn-sm" id="restart">Restart</button>') +
+    '<div class="stat-row">' + BB.statRow([
+      { id: 'st-level', label: 'Level', value: 0, hl: true },
+      { id: 'st-best', label: 'Best', value: '—' }
+    ]) + '</div>' +
+    '<div class="board-area">' +
+      '<div id="start" class="startpanel">' +
+        '<h2 style="font-family:var(--font-display);font-weight:600;font-size:1.6rem">Sequence memory</h2>' +
+        '<p class="muted mt-2" style="font-size:.94rem;max-width:40ch;margin-inline:auto">' +
+        'Watch the tiles, then tap them back in order. One more each round.</p>' +
+        '<button class="btn mt-3" id="go">Start</button>' +
+      '</div>' +
+      '<div id="play" class="hidden">' +
+        '<div class="pad-grid" id="grid"></div>' +
+        '<div class="stage-note" id="note"></div>' +
+      '</div>' +
+    '</div>';
+
+  var gridEl = document.getElementById('grid');
+  var note = document.getElementById('note');
+  gridEl.innerHTML = Array.from({ length: 9 }, function (_, i) {
+    return '<div class="cell" data-i="' + i + '"></div>';
+  }).join('');
+  var cells = Array.from(gridEl.children);
+
+  function flash(i, cls, ms) {
+    return new Promise(function (res) {
+      var c = cells[i];
+      c.classList.add(cls || 'lit');
+      setTimeout(function () {
+        c.classList.remove(cls || 'lit');
+        setTimeout(res, 110);
+      }, ms || 380);
+    });
+  }
+
+  async function nextRound() {
+    level++;
+    seq.push(Math.floor(Math.random() * 9));
+    input = [];
+    BB.setStat('st-level', level);
+    note.textContent = 'Watch…';
+    playing = true; accepting = false;
+    gridEl.classList.add('locked');
+    await new Promise(function (r) { setTimeout(r, 560); });
+    var speed = Math.max(200, 400 - level * 12);
+    for (var i = 0; i < seq.length; i++) await flash(seq[i], 'lit', speed);
+    playing = false; accepting = true;
+    gridEl.classList.remove('locked');
+    note.textContent = 'Your turn — ' + seq.length + ' tile' + (seq.length === 1 ? '' : 's');
+  }
+
+  gridEl.addEventListener('click', async function (e) {
+    var c = e.target.closest('.cell');
+    if (!c || !accepting) return;
+    var i = Number(c.getAttribute('data-i'));
+    var step = input.length;
+
+    if (seq[step] !== i) {
+      accepting = false;
+      await flash(i, 'bad', 460);
+      return end();
+    }
+
+    input.push(i);
+    await flash(i, 'good', 170);
+    if (input.length === seq.length) {
+      accepting = false;
+      note.textContent = 'Correct';
+      setTimeout(nextRound, 540);
+    }
+  });
+
+  async function end() {
+    var score = level - 1;
+    note.textContent = 'Wrong tile. You reached level ' + level + '.';
+    var res = await BB.finish(KEY, score, {});
+    BB.setStat('st-best', BB.bestFor(KEY));
+    BB.resultPanel({
+      game: KEY,
+      title: 'Level reached',
+      value: score,
+      sub: score >= 14 ? 'Exceptional.'
+        : score >= 10 ? 'Well above average.'
+        : score >= 7 ? 'About average.'
+        : 'Say the positions out loud.',
+      isBest: res.newBest,
+      onAgain: start
+    });
+  }
+
+  function start() {
+    document.getElementById('start').classList.add('hidden');
+    document.getElementById('play').classList.remove('hidden');
+    seq = []; input = []; level = 0;
+    BB.setStat('st-level', 0);
+    cells.forEach(function (c) { c.className = 'cell'; });
+    nextRound();
+  }
+
+  document.getElementById('go').addEventListener('click', start);
+  document.getElementById('restart').addEventListener('click', start);
+
+  BB.gameInit(KEY, 'mount', null, function () {
+    var b = BB.bestFor(KEY);
+    BB.setStat('st-best', b !== undefined ? b : 0);
+  });
+})();
+</script>
+</body>
+</html>

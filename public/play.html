@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Play a friend — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23121212'/><text y='66' x='50' text-anchor='middle' font-size='46' font-family='Helvetica,sans-serif' font-weight='bold' fill='white'>BB</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .panes { grid-template-columns: 1fr; } }
+
+  .countdown-screen {
+    position: fixed; inset: 0; z-index: 450;
+    background: var(--bg);
+    display: grid; place-items: center;
+  }
+  .countdown-screen .n {
+    font-family: var(--font-display);
+    font-size: clamp(5rem, 22vw, 11rem);
+    font-weight: 700; line-height: 1;
+    animation: cdPop .85s var(--ease);
+  }
+  @keyframes cdPop { from { opacity: 0; transform: scale(.55); } 60% { opacity: 1; } to { opacity: 1; transform: scale(1); } }
+
+  /* wordle race */
+  .vs-grid { display: grid; gap: 5px; width: min(320px, 82vw); margin: 0 auto; }
+  .vs-row { display: grid; grid-template-columns: repeat(var(--cols, 5), 1fr); gap: 5px; }
+  .vs-tile {
+    aspect-ratio: 1; display: grid; place-items: center;
+    font-size: clamp(1.2rem, 5.6vw, 1.7rem); font-weight: 700; text-transform: uppercase;
+    border: 2px solid var(--border); border-radius: 4px; background: var(--surface);
+  }
+  .vs-tile.filled { border-color: var(--border-mid); animation: vpop .12s var(--ease); }
+  @keyframes vpop { 50% { transform: scale(1.08); } }
+  .vs-tile.flip { animation: vflip .5s ease forwards; }
+  @keyframes vflip { 0% { transform: rotateX(0); } 45%,55% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+  .vs-tile.correct { background: var(--green); border-color: var(--green); color: #fff; }
+  .vs-tile.present { background: var(--yellow); border-color: var(--yellow); color: #fff; }
+  .vs-tile.absent { background: var(--grey); border-color: var(--grey); color: #fff; }
+  .vs-row.shake { animation: vshake .42s var(--ease-soft); }
+  @keyframes vshake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+
+  /* typing race */
+  .vs-typebox {
+    font-family: var(--font-mono);
+    font-size: clamp(1rem, 2.4vw, 1.2rem);
+    line-height: 2; height: 6em; overflow: hidden;
+  }
+  .vs-typebox > div { transition: transform .26s var(--ease); }
+  .tw { display: inline-block; margin-right: .55ch; padding: 0 .1ch; border-radius: 3px; }
+  .tw.active { background: color-mix(in srgb, var(--pop) 16%, transparent); }
+  .tc { color: var(--muted); }
+  .tc.ok { color: var(--text); }
+  .tc.bad { color: var(--bad); }
+
+  /* aim race */
+  .vs-arena {
+    position: relative; height: min(52vh, 380px);
+    border-radius: var(--radius); background: var(--surface-2);
+    border: 1px solid var(--border); overflow: hidden; cursor: crosshair;
+  }
+  .vs-target {
+    position: absolute; width: 42px; height: 42px; margin: -21px 0 0 -21px;
+    border-radius: 50%; background: var(--bad);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--bad) 20%, transparent);
+    display: grid; place-items: center; cursor: pointer;
+    animation: tIn .15s var(--ease);
+  }
+  .vs-target::after { content: ""; width: 13px; height: 13px; border-radius: 50%; background: var(--surface); }
+  @keyframes tIn { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+  .vs-target.pop { animation: tPop .2s var(--ease) forwards; pointer-events: none; }
+  @keyframes tPop { to { transform: scale(1.7); opacity: 0; } }
+
+  /* reaction duel */
+  .vs-pad {
+    min-height: 300px; border-radius: var(--radius);
+    display: grid; place-items: center; text-align: center;
+    background: var(--surface-2); border: 1px solid var(--border);
+    cursor: pointer; user-select: none; padding: 26px;
+    transition: background .12s;
+  }
+  .vs-pad.wait { background: var(--bad-soft); }
+  .vs-pad.go { background: var(--green); }
+  .vs-pad.go h3, .vs-pad.go p { color: #fff; }
+  .vs-pad h3 { font-family: var(--font-display); font-size: clamp(1.4rem, 5vw, 2rem); font-weight: 700; }
+  .vs-pad p { margin-top: 6px; color: var(--text-2); font-size: .92rem; }
+
+  .live-rail { display: grid; gap: 7px; margin-bottom: 18px; }
+  .live-row { display: flex; align-items: center; gap: 10px; font-size: .86rem; }
+  .live-row .nm { width: 86px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live-row .pos { width: 56px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <section class="game-shell">
+    <div class="wrap" style="max-width:660px" id="view"></div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/data.js"></script>
+<script src="/js/words.js"></script>
+<script src="/js/versus.js"></script>
+<script>
+(function () {
+  var view = document.getElementById('view');
+  var params = new URLSearchParams(location.search);
+  var teardown = null;
+  var countdownTimer = null;
+  var lastStatus = null;
+
+  var VERSUS = ['wordle', 'typing', 'aim', 'reaction'];
+  function gname(k) { return BB.GAMES[k].name; }
+
+  /* ---------------- entry ---------------- */
+  function renderEntry(err) {
+    var preset = params.get('game');
+    if (VERSUS.indexOf(preset) === -1) preset = 'wordle';
+    var joinCode = (params.get('code') || '').toUpperCase();
+    var name = BB.lsGet('bb_name', '') || (BB.user ? BB.user.username : '');
+
+    view.innerHTML =
+      '<a class="back-link" href="/games">' + BB.ICON.back + ' All games</a>' +
+      '<h1 class="display" style="font-size:clamp(1.7rem,4.5vw,2.3rem)">Play a friend</h1>' +
+      '<p class="muted mt-1" style="font-size:.94rem">Same puzzle, same moment, live scores.</p>' +
+      (err ? '<div class="notice notice-bad mt-2">' + err + '</div>' : '') +
+      '<div class="field mt-3"><label for="nm">Your name</label>' +
+      '<input class="input" id="nm" maxlength="14" placeholder="Ben" value="' + name.replace(/"/g, '') + '"></div>' +
+      '<div class="panes mt-2">' +
+        '<div class="card">' +
+          '<h3 style="font-size:1.05rem">Start a room</h3>' +
+          '<p class="hint" style="margin-top:4px">Pick a game. You can change it later.</p>' +
+          '<div class="chips mt-2" id="pickgame">' +
+            VERSUS.map(function (k) {
+              return '<button class="chip' + (k === preset ? ' on' : '') + '" data-g="' + k + '">' + gname(k) + '</button>';
+            }).join('') +
+          '</div>' +
+          '<button class="btn btn-block mt-3" id="make"><span>Make a code</span></button>' +
+        '</div>' +
+        '<div class="card">' +
+          '<h3 style="font-size:1.05rem">Join a room</h3>' +
+          '<p class="hint" style="margin-top:4px">Type the four letters they sent you.</p>' +
+          '<input class="input code-input mt-2" id="code" maxlength="4" placeholder="ABCD" value="' + joinCode + '">' +
+          '<button class="btn btn-ghost btn-block mt-3" id="joinbtn"><span>Join</span></button>' +
+        '</div>' +
+      '</div>';
+
+    var chosen = preset;
+    view.querySelector('#pickgame').addEventListener('click', function (e) {
+      var b = e.target.closest('.chip');
+      if (!b) return;
+      chosen = b.getAttribute('data-g');
+      this.querySelectorAll('.chip').forEach(function (x) { x.classList.toggle('on', x === b); });
+    });
+
+    function myName() {
+      var v = view.querySelector('#nm').value.trim();
+      BB.lsSet('bb_name', v);
+      return v;
+    }
+
+    view.querySelector('#make').addEventListener('click', async function () {
+      this.disabled = true;
+      try { await VS.create(myName(), chosen); enterRoom(); }
+      catch (e) { renderEntry(e.message); }
+    });
+    view.querySelector('#joinbtn').addEventListener('click', doJoin);
+    view.querySelector('#code').addEventListener('keydown', function (e) { if (e.key === 'Enter') doJoin(); });
+    view.querySelector('#code').addEventListener('input', function () {
+      this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+
+    async function doJoin() {
+      var code = view.querySelector('#code').value.trim().toUpperCase();
+      if (code.length !== 4) return BB.toast('Codes are four characters');
+      try { await VS.join(code, myName()); enterRoom(); }
+      catch (e) { renderEntry(e.message); }
+    }
+  }
+
+  /* ---------------- room ---------------- */
+  function enterRoom() {
+    history.replaceState(null, '', '/play?code=' + VS.code);
+    VS.connect(onState);
+    onState(VS.state);
+  }
+
+  function onState(s) {
+    if (s.status === lastStatus && s.status !== 'lobby' && s.status !== 'done') {
+      return paintLive(s); // mid-game: only refresh the rail
+    }
+    lastStatus = s.status;
+    if (s.status === 'lobby') renderLobby(s);
+    else if (s.status === 'playing') renderCountdown(s);
+    else renderResults(s);
+  }
+
+  function initials(n) { return n.slice(0, 2).toUpperCase(); }
+
+  function renderLobby(s) {
+    stopGame();
+    var host = VS.isHost();
+    var g = s.game;
+    view.innerHTML =
+      '<a class="back-link" href="#" id="quit">' + BB.ICON.back + ' Leave room</a>' +
+      '<div class="center">' +
+        '<div class="kicker">Room code</div>' +
+        '<div class="code-display" id="codetext">' + s.code + '</div>' +
+        '<div class="row mt-2" style="justify-content:center">' +
+          '<button class="btn btn-ghost btn-sm" id="copy"><span>Copy link</span></button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="section-head mt-4" style="margin-bottom:12px"><div><div class="kicker">Players</div>' +
+      '<h2 style="font-size:1.3rem">' + s.players.length + ' in the room</h2></div></div>' +
+      '<div class="player-list" id="plist"></div>' +
+      '<div class="mt-4">' +
+        '<div class="modes-label">Game</div>' +
+        '<div class="chips" id="gamechips">' +
+          VERSUS.map(function (k) {
+            return '<button class="chip' + (k === g ? ' on' : '') + '"' + (host ? '' : ' disabled') + ' data-g="' + k + '">' + gname(k) + '</button>';
+          }).join('') +
+        '</div>' +
+        '<div id="optbox"></div>' +
+        (host
+          ? '<button class="btn btn-block btn-lg mt-3" id="go"><span>Start the round</span></button>'
+          : '<p class="hint center mt-3">Waiting for the host to start.</p>') +
+      '</div>';
+
+    paintPlayers(s);
+    renderOptions(g, host);
+
+    view.querySelector('#quit').addEventListener('click', function (e) {
+      e.preventDefault(); VS.leave(); VS.disconnect(); location.href = '/play';
+    });
+    view.querySelector('#copy').addEventListener('click', function () {
+      var url = location.origin + '/play?code=' + s.code;
+      navigator.clipboard && navigator.clipboard.writeText(url).then(
+        function () { BB.toast('Link copied'); },
+        function () { BB.toast(url); }
+      );
+    });
+    if (host) {
+      view.querySelector('#gamechips').addEventListener('click', function (e) {
+        var b = e.target.closest('.chip');
+        if (!b) return;
+        var k = b.getAttribute('data-g');
+        this.querySelectorAll('.chip').forEach(function (x) { x.classList.toggle('on', x === b); });
+        renderOptions(k, host);
+      });
+      view.querySelector('#go').addEventListener('click', async function () {
+        this.disabled = true;
+        var pick = view.querySelector('#gamechips .chip.on').getAttribute('data-g');
+        try { await VS.start(pick, readOptions()); }
+        catch (e) { BB.toast(e.message); this.disabled = false; }
+      });
+    }
+  }
+
+  function renderOptions(game, host) {
+    var box = view.querySelector('#optbox');
+    if (!box) return;
+    if (game === 'wordle') {
+      box.innerHTML = '<div class="modes-label">Word length</div><div class="chips" id="optchips">' +
+        [3, 4, 5, 6].map(function (n) {
+          return '<button class="chip' + (n === 5 ? ' on' : '') + '"' + (host ? '' : ' disabled') + ' data-v="' + n + '">' + n + '</button>';
+        }).join('') + '</div>';
+    } else if (game === 'typing') {
+      box.innerHTML = '<div class="modes-label">Seconds</div><div class="chips" id="optchips">' +
+        [15, 30, 60].map(function (n) {
+          return '<button class="chip' + (n === 30 ? ' on' : '') + '"' + (host ? '' : ' disabled') + ' data-v="' + n + '">' + n + '</button>';
+        }).join('') + '</div>';
+    } else {
+      box.innerHTML = '';
+      return;
+    }
+    if (host) {
+      box.querySelector('#optchips').addEventListener('click', function (e) {
+        var b = e.target.closest('.chip');
+        if (!b) return;
+        this.querySelectorAll('.chip').forEach(function (x) { x.classList.toggle('on', x === b); });
+      });
+    }
+  }
+
+  function readOptions() {
+    var on = view.querySelector('#optchips .chip.on');
+    if (!on) return {};
+    var v = Number(on.getAttribute('data-v'));
+    var game = view.querySelector('#gamechips .chip.on').getAttribute('data-g');
+    return game === 'wordle' ? { len: v } : { dur: v };
+  }
+
+  function paintPlayers(s) {
+    var box = view.querySelector('#plist');
+    if (!box) return;
+    box.innerHTML = s.players.map(function (p) {
+      return '<div class="player-row' + (p.id === VS.pid ? ' you' : '') + '">' +
+        '<span class="avatar-sm">' + initials(p.name) + '</span>' +
+        '<span class="nm">' + p.name + (p.id === VS.pid ? ' (you)' : '') + '</span>' +
+        (p.id === s.hostId ? '<span class="badge host">Host</span>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  /* ---------------- countdown then play ---------------- */
+  function renderCountdown(s) {
+    stopGame();
+    var screen = document.createElement('div');
+    screen.className = 'countdown-screen';
+    screen.innerHTML = '<div class="n" id="cdn">3</div>';
+    document.body.appendChild(screen);
+
+    renderPlaying(s);
+
+    clearInterval(countdownTimer);
+    countdownTimer = setInterval(function () {
+      var left = Math.ceil((s.startAt - Date.now()) / 1000);
+      var el = document.getElementById('cdn');
+      if (left > 0) {
+        if (el && el.textContent !== String(left)) {
+          el.textContent = left;
+          el.style.animation = 'none';
+          void el.offsetWidth;
+          el.style.animation = '';
+        }
+      } else {
+        clearInterval(countdownTimer);
+        screen.remove();
+        startGame(s);
+      }
+    }, 90);
+  }
+
+  function renderPlaying(s) {
+    view.innerHTML =
+      '<div class="row-between" style="margin-bottom:14px">' +
+        '<div><div class="kicker">' + gname(s.game) + '</div>' +
+        '<h1 class="display" style="font-size:1.4rem">Room ' + s.code + '</h1></div>' +
+        '<span class="badge">Live</span>' +
+      '</div>' +
+      '<div class="live-rail" id="rail"></div>' +
+      '<div class="board-area" id="board"></div>';
+    paintLive(s);
+  }
+
+  function paintLive(s) {
+    var rail = document.getElementById('rail');
+    if (!rail) return;
+    rail.innerHTML = s.players.map(function (p) {
+      var mine = p.id === VS.pid;
+      return '<div class="live-row">' +
+        '<span class="nm">' + (mine ? 'You' : p.name) + '</span>' +
+        '<span class="race-bar' + (mine ? ' me' : '') + '"><i style="width:' + (p.progress || 0) + '%"></i></span>' +
+        '<span class="pos">' + (p.done ? '✓' : Math.round(p.progress || 0) + '%') + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  function startGame(s) {
+    var board = document.getElementById('board');
+    if (!board) return;
+    var runner = VS.GAMES[s.game];
+    if (!runner) return;
+    var api = {
+      lastProgress: 0,
+      progress: function (p) {
+        api.lastProgress = Math.max(api.lastProgress, p);
+        VS.report(api.lastProgress, false);
+      },
+      finish: function (score) {
+        VS.report(100, true, score, true);
+        // also count it towards the solo leaderboard where it makes sense
+        if (s.game === 'typing') BB.submitScore('typing', score, { versus: true });
+        if (s.game === 'aim') BB.submitScore('aim', score, { versus: true });
+        if (s.game === 'reaction') BB.submitScore('reaction', score, { versus: true });
+      },
+    };
+    teardown = runner(board, { seed: s.seed, len: s.options.len, dur: s.options.dur }, api);
+  }
+
+  function stopGame() {
+    if (teardown) { try { teardown(); } catch (e) {} teardown = null; }
+    clearInterval(countdownTimer);
+    document.querySelectorAll('.countdown-screen').forEach(function (e) { e.remove(); });
+  }
+
+  /* ---------------- results ---------------- */
+  function renderResults(s) {
+    stopGame();
+    var ranked = VS.rank(s.players, s.game);
+    view.innerHTML =
+      '<div class="center"><div class="kicker">' + gname(s.game) + '</div>' +
+      '<h1 class="display" style="font-size:clamp(1.7rem,5vw,2.3rem)">' +
+      (ranked[0] ? (ranked[0].id === VS.pid ? 'You won' : ranked[0].name + ' won') : 'Round over') + '</h1></div>' +
+      '<div class="podium mt-3">' +
+        ranked.map(function (p, i) {
+          return '<div class="podium-row' + (i === 0 ? ' first' : '') + '" style="animation-delay:' + (i * 80) + 'ms">' +
+            '<span class="podium-pos">' + (i + 1) + '</span>' +
+            '<span class="avatar-sm">' + initials(p.name) + '</span>' +
+            '<span class="nm" style="flex:1;font-weight:600">' + p.name + (p.id === VS.pid ? ' (you)' : '') + '</span>' +
+            '<b>' + VS.scoreLabel(s.game, p.score) + '</b>' +
+            '</div>';
+        }).join('') +
+      '</div>' +
+      '<div class="row mt-4" style="justify-content:center">' +
+        (VS.isHost()
+          ? '<button class="btn" id="again"><span>Back to lobby</span></button>'
+          : '<span class="muted" style="font-size:.9rem">Waiting for the host.</span>') +
+        '<a class="btn btn-ghost" href="/games"><span>Leave</span></a>' +
+      '</div>';
+
+    var again = view.querySelector('#again');
+    if (again) again.addEventListener('click', function () { this.disabled = true; VS.again().catch(function (e) { BB.toast(e.message); }); });
+  }
+
+  /* ---------------- boot ----------------
+     No leave-on-unload: a refresh would drop you out of your own room.
+     The server retires players that stop pinging after a minute. */
+  BB.init({ active: 'play' }).then(async function () {
+    var saved = BB.lsGet('bb_room', null);
+    var urlCode = (params.get('code') || '').toUpperCase();
+    // rejoin a room we were already in (survives a refresh)
+    if (saved && saved.code && saved.pid && (!urlCode || urlCode === saved.code)) {
+      try {
+        var d = await BB.api('/api/rooms/' + saved.code + '?pid=' + saved.pid);
+        if (d.state.players.some(function (p) { return p.id === saved.pid; })) {
+          VS.code = saved.code; VS.pid = saved.pid; VS.state = d.state;
+          return enterRoom();
+        }
+      } catch (e) {}
+      VS.forget();
+    }
+    renderEntry();
+  });
+})();
+</script>
+</body>
+</html>

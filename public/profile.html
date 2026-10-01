@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your profile — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%235b5bd6'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='white'>BB</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .avatar {
+    width: 66px; height: 66px;
+    border-radius: 20px;
+    display: grid; place-items: center;
+    background: linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 45%, #ff7a59));
+    color: #fff;
+    font-size: 1.7rem;
+    font-weight: 800;
+    letter-spacing: -.03em;
+    box-shadow: var(--shadow);
+  }
+  .device-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .device-row:last-child { border-bottom: 0; }
+  .device-row .info { flex: 1; min-width: 0; }
+  .device-row .info b { font-size: .94rem; }
+  .device-row .info span { display: block; font-size: .81rem; color: var(--muted); }
+  .pill-now {
+    font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    padding: 3px 8px; border-radius: 100px;
+    background: var(--good-soft); color: var(--good);
+    border: 1px solid color-mix(in srgb, var(--good) 24%, transparent);
+  }
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 30px; margin-top: 10px; }
+  .spark i {
+    flex: 1; min-width: 2px;
+    background: color-mix(in srgb, var(--tile, var(--accent)) 55%, transparent);
+    border-radius: 2px 2px 0 0;
+    transition: height .6s var(--ease);
+  }
+  .best-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 14px; }
+  .best-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px;
+    transition: transform .35s var(--ease), box-shadow .35s var(--ease);
+  }
+  .best-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+  .best-card .top { display: flex; align-items: center; gap: 9px; font-size: .84rem; color: var(--text-2); font-weight: 600; }
+  .best-card .val {
+    margin-top: 8px; font-size: 1.6rem; font-weight: 700;
+    letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+  }
+  .best-card .plays { font-size: .77rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <section class="section" id="content" style="padding-top:36px">
+    <div class="wrap">
+      <div class="empty">Loading your profile…</div>
+    </div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script>
+(function () {
+  var content = document.getElementById('content');
+
+  function fmtDate(t) {
+    return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  function fmtAgo(t) {
+    var s = Math.floor((Date.now() - t) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + ' min ago';
+    if (s < 86400) return Math.floor(s / 3600) + ' hr ago';
+    if (s < 2592000) return Math.floor(s / 86400) + ' days ago';
+    return fmtDate(t);
+  }
+
+  function render(user) {
+    var keys = Object.keys(BB.GAMES);
+    var played = keys.filter(function (k) { return user.best[k] !== undefined; });
+    var totalRounds = keys.reduce(function (a, k) { return a + ((user.history[k] || []).length); }, 0);
+
+    content.innerHTML =
+      '<div class="wrap">' +
+        '<div class="row reveal" style="gap:18px;align-items:center">' +
+          '<div class="avatar">' + user.username.slice(0, 2).toUpperCase() + '</div>' +
+          '<div style="flex:1;min-width:200px">' +
+            '<h1 style="font-family:var(--font-display);font-weight:600;font-size:clamp(1.6rem,4vw,2.2rem)">' + user.username + '</h1>' +
+            '<p class="muted" style="font-size:.9rem">Playing since ' + fmtDate(user.created) + ' · ' + played.length + ' of ' + keys.length + ' games tried</p>' +
+          '</div>' +
+          '<button class="btn btn-ghost btn-sm" id="logout">Sign out</button>' +
+        '</div>' +
+
+        '<div class="stat-strip mt-3 reveal reveal-scale">' +
+          '<div class="stat-cell"><div class="stat-num" id="n-rounds">0</div><div class="stat-label">Rounds played</div></div>' +
+          '<div class="stat-cell"><div class="stat-num" id="n-games">0</div><div class="stat-label">Games tried</div></div>' +
+          '<div class="stat-cell"><div class="stat-num" id="n-records">0</div><div class="stat-label">Personal bests</div></div>' +
+        '</div>' +
+
+        '<div class="section-head mt-4 reveal"><div><div class="kicker">Personal bests</div><h2>Your scores</h2></div></div>' +
+        (played.length
+          ? '<div class="best-grid" data-stagger="55">' + played.map(function (k) {
+              var g = BB.GAMES[k];
+              var hist = (user.history[k] || []);
+              var recent = hist.slice(-16);
+              var max = Math.max.apply(null, recent.map(function (h) { return h.s; }).concat([1]));
+              return '<a class="best-card reveal" style="--tile:' + g.color + '" href="' + g.href + '">' +
+                '<div class="top"><span>' + g.glyph + '</span><span>' + g.name + '</span></div>' +
+                '<div class="val">' + g.fmt(user.best[k]) + '</div>' +
+                '<div class="plays">' + hist.length + ' round' + (hist.length === 1 ? '' : 's') + '</div>' +
+                '<div class="spark">' + recent.map(function (h) {
+                  return '<i style="height:' + Math.max(8, (h.s / max) * 100) + '%"></i>';
+                }).join('') + '</div></a>';
+            }).join('') + '</div>'
+          : '<div class="card empty reveal">No scores yet. <a href="/games" style="text-decoration:underline">Pick a game</a>.</div>') +
+
+        '<div class="section-head mt-4 reveal"><div><div class="kicker">Security</div><h2>Remembered devices</h2>' +
+        '<p>Remove any you do not recognise.</p></div></div>' +
+        '<div class="card reveal" id="devices"><div class="empty">Loading devices…</div></div>' +
+
+        '<div class="section-head mt-4 reveal"><div><h2>Change password</h2></div></div>' +
+        '<div class="card reveal" style="max-width:420px">' +
+          '<form id="pw-form"><div id="pw-msg"></div>' +
+          '<div class="field"><label for="cur">Current password</label><input class="input" id="cur" type="password" required autocomplete="current-password"></div>' +
+          '<div class="field"><label for="nxt">New password</label><input class="input" id="nxt" type="password" required minlength="4" autocomplete="new-password"></div>' +
+          '<button class="btn btn-block" type="submit">Update password</button></form>' +
+        '</div>' +
+      '</div>';
+
+    BB.countUp(document.getElementById('n-rounds'), totalRounds);
+    BB.countUp(document.getElementById('n-games'), played.length);
+    BB.countUp(document.getElementById('n-records'), played.length);
+    BB.initReveal();
+
+    document.getElementById('logout').addEventListener('click', async function () {
+      await BB.logout();
+      location.href = '/';
+    });
+
+    document.getElementById('pw-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var box = document.getElementById('pw-msg');
+      try {
+        await BB.api('/api/change-password', {
+          method: 'POST',
+          body: JSON.stringify({ current: document.getElementById('cur').value, next: document.getElementById('nxt').value })
+        });
+        box.innerHTML = '<div class="notice notice-good">Password updated.</div>';
+        e.target.reset();
+      } catch (err) {
+        box.innerHTML = '<div class="notice notice-bad">' + err.message + '</div>';
+      }
+    });
+
+    loadDevices();
+  }
+
+  async function loadDevices() {
+    var box = document.getElementById('devices');
+    try {
+      var d = await BB.api('/api/devices');
+      box.innerHTML = d.devices.sort(function (a, b) { return b.lastSeen - a.lastSeen; }).map(function (v) {
+        return '<div class="device-row"><div class="info"><b>' + v.device + '</b>' +
+          '<span>Signed in ' + fmtDate(v.created) + ' · last used ' + fmtAgo(v.lastSeen) + '</span></div>' +
+          (v.current ? '<span class="pill-now">This device</span>' : '') +
+          '<button class="btn btn-ghost btn-sm" data-remove="' + v.id + '">Remove</button></div>';
+      }).join('');
+      box.querySelectorAll('[data-remove]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          b.disabled = true;
+          await BB.api('/api/devices/' + b.getAttribute('data-remove'), { method: 'DELETE' });
+          BB.toast('Device removed');
+          var me = await BB.api('/api/me');
+          if (!me.user) return location.href = '/';
+          loadDevices();
+        });
+      });
+    } catch (e) {
+      box.innerHTML = '<div class="empty">Could not load devices.</div>';
+    }
+  }
+
+  BB.init({ active: 'profile' }).then(function (user) {
+    if (!user) return location.replace('/login?next=/profile');
+    render(user);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Number Memory — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%237a3fc9'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='white'>N</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .stage { min-height: 320px; display: grid; place-items: center; text-align: center; padding: 26px 10px; }
+  .digits {
+    font-family: var(--font-mono);
+    font-size: clamp(1.9rem, 8vw, 3.4rem);
+    font-weight: 700;
+    letter-spacing: .12em;
+    animation: fadeUp .3s var(--ease);
+  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+  .countdown { height: 4px; background: var(--surface-2); border-radius: 4px; overflow: hidden; width: min(360px, 80vw); margin: 22px auto 0; }
+  .countdown i { display: block; height: 100%; width: 100%; background: var(--tile); }
+  .answer-input {
+    font-family: var(--font-mono);
+    font-size: clamp(1.4rem, 6vw, 2.2rem);
+    text-align: center;
+    letter-spacing: .12em;
+    padding: 14px;
+    max-width: 380px;
+  }
+  .compare { font-family: var(--font-mono); font-size: 1.15rem; letter-spacing: .08em; }
+  .compare i { font-style: normal; }
+  .compare i.ok { color: var(--good); }
+  .compare i.no { color: var(--bad); text-decoration: underline; }
+</style>
+</head>
+<body>
+<main>
+  <section class="game-shell">
+    <div class="wrap" style="max-width:600px" id="mount"></div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/game-shell.js"></script>
+<script>
+(function () {
+  var KEY = 'number';
+  var level = 1, number = '', timer = null;
+
+  document.getElementById('mount').innerHTML =
+    BB.gameHead(KEY, '<button class="btn btn-ghost btn-sm" id="restart">Restart</button>') +
+    '<div class="stat-row">' + BB.statRow([
+      { id: 'st-level', label: 'Digits', value: 1, hl: true },
+      { id: 'st-best', label: 'Best', value: '—' }
+    ]) + '</div>' +
+    '<div class="board-area"><div class="stage" id="stage"></div></div>';
+
+  var stage = document.getElementById('stage');
+
+  function intro() {
+    stage.innerHTML = '<div>' +
+      '<h2 style="font-family:var(--font-display);font-weight:600;font-size:1.6rem">Number memory</h2>' +
+      '<p class="muted mt-2" style="font-size:.94rem;max-width:40ch;margin-inline:auto">' +
+      'A number flashes up. Type it back. It grows a digit each round.</p>' +
+      '<button class="btn mt-3" id="go">Start</button></div>';
+    document.getElementById('go').addEventListener('click', function () { level = 1; show(); });
+  }
+
+  function show() {
+    BB.setStat('st-level', level);
+    number = '';
+    for (var i = 0; i < level; i++) number += Math.floor(Math.random() * 10);
+    var ms = 1400 + level * 380;
+    stage.innerHTML = '<div><div class="digits">' + number + '</div>' +
+      '<div class="countdown"><i id="cd"></i></div></div>';
+    var cd = document.getElementById('cd');
+    cd.style.transition = 'width ' + ms + 'ms linear';
+    requestAnimationFrame(function () { cd.style.width = '0%'; });
+    clearTimeout(timer);
+    timer = setTimeout(ask, ms);
+  }
+
+  function ask() {
+    stage.innerHTML = '<div style="width:100%">' +
+      '<p class="muted" style="font-size:.86rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700">What was the number?</p>' +
+      '<input class="input answer-input mt-2" id="ans" inputmode="numeric" autocomplete="off" placeholder="' + '•'.repeat(level) + '">' +
+      '<button class="btn mt-3" id="submit">Submit</button></div>';
+    var input = document.getElementById('ans');
+    input.focus();
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') check(); });
+    input.addEventListener('input', function () { input.value = input.value.replace(/\D/g, '').slice(0, level + 4); });
+    document.getElementById('submit').addEventListener('click', check);
+  }
+
+  async function check() {
+    var given = document.getElementById('ans').value;
+    if (given === number) {
+      level++;
+      stage.innerHTML = '<div><div class="digits" style="color:var(--good)">Correct</div>' +
+        '<p class="muted mt-2">' + level + ' digits next.</p></div>';
+      setTimeout(show, 850);
+      return;
+    }
+
+    var score = level - 1;
+    var compare = number.split('').map(function (d, i) {
+      return '<i class="' + (given[i] === d ? 'ok' : 'no') + '">' + d + '</i>';
+    }).join('');
+
+    var res = await BB.finish(KEY, score, { answered: given });
+    BB.setStat('st-best', BB.bestFor(KEY));
+
+    stage.innerHTML = '<div><div class="digits" style="color:var(--bad);font-size:2rem">Not quite</div>' +
+      '<p class="muted mt-2" style="font-size:.9rem">The number was</p>' +
+      '<div class="compare mt-1">' + compare + '</div>' +
+      '<p class="muted mt-2" style="font-size:.9rem">You typed <b>' + (given || '—') + '</b></p>' +
+      '<button class="btn mt-3" id="go">Try again</button></div>';
+    document.getElementById('go').addEventListener('click', function () { level = 1; show(); });
+
+    BB.resultPanel({
+      game: KEY,
+      title: 'Digits remembered',
+      value: score,
+      sub: score >= 12 ? 'Well past normal.'
+        : score >= 9 ? 'Most people stop around seven.'
+        : score >= 7 ? 'About average.'
+        : 'Try reading them in pairs.',
+      isBest: res.newBest,
+      onAgain: function () { level = 1; show(); }
+    });
+  }
+
+  document.getElementById('restart').addEventListener('click', function () { clearTimeout(timer); intro(); });
+
+  intro();
+  BB.gameInit(KEY, 'mount', null, function () {
+    var b = BB.bestFor(KEY);
+    BB.setStat('st-best', b !== undefined ? b : 0);
+  });
+})();
+</script>
+</body>
+</html>

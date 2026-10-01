@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connections — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%235a7dd4'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='Helvetica,sans-serif' font-weight='bold' fill='white'>C</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .cboard { display: grid; gap: 7px; }
+  .crow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .cword {
+    min-height: 70px; padding: 6px 4px;
+    display: grid; place-items: center; text-align: center;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 6px;
+    font-weight: 700; font-size: clamp(.6rem, 2.4vw, .88rem);
+    text-transform: uppercase; cursor: pointer; user-select: none;
+    word-break: break-word; hyphens: auto;
+    transition: transform .16s var(--ease), background .2s, color .2s, border-color .2s;
+  }
+  .cword:hover { border-color: var(--border-mid); transform: translateY(-2px); }
+  .cword.on { background: var(--ink); color: var(--bg); border-color: var(--ink); transform: translateY(-2px) scale(.97); }
+  .cword.shake { animation: cshake .44s var(--ease-soft); }
+  @keyframes cshake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+  .cword.bump { animation: cbump .36s var(--ease); }
+  @keyframes cbump { 45% { transform: translateY(-9px); } }
+  .solved {
+    grid-column: 1 / -1; border-radius: 6px; padding: 12px 15px;
+    text-align: center; color: #fff; animation: solveIn .46s var(--ease);
+  }
+  @keyframes solveIn { from { opacity: 0; transform: scale(.95); } to { opacity: 1; transform: none; } }
+  .solved .cat { font-size: .71rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; opacity: .92; }
+  .solved .ws { font-size: .9rem; font-weight: 650; margin-top: 2px; }
+  .lives { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 15px; }
+  .life { width: 11px; height: 11px; border-radius: 50%; background: var(--text-2); transition: transform .3s var(--ease), background .3s, opacity .3s; }
+  .life.gone { background: var(--border); opacity: .5; transform: scale(.7); }
+  .cactions { display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<main>
+  <section class="game-shell">
+    <div class="wrap" style="max-width:580px" id="mount"></div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/data.js"></script>
+<script src="/js/words.js"></script>
+<script src="/js/game-shell.js"></script>
+<script>
+(function () {
+  var KEY = 'connections';
+  var P = new URLSearchParams(location.search);
+  var MODE = P.get('mode') === 'infinite' ? 'infinite' : 'daily';
+  var COLORS = ['#c9962a', '#3a8a4a', '#2a7fb8', '#7a4bbd'];
+  var MAX_MISTAKES = 4;
+
+  var store = BB.lsGet('bb_conn', { wins: 0, played: 0, perfect: 0 });
+  var puzzle = [], tiles = [], selected = [], solved = [], mistakes = 0, over = false;
+  var cdTimer = null;
+
+  document.getElementById('mount').innerHTML =
+    BB.gameHead(KEY, '<button class="btn btn-ghost btn-sm" id="how"><span>How to play</span></button>' +
+      (MODE === 'infinite' ? '<button class="btn btn-ghost btn-sm" id="newgame"><span>New puzzle</span></button>' : '')) +
+    '<div class="mode-bar">' +
+      '<span class="lbl">Mode</span>' +
+      '<div class="chips">' +
+        '<a class="chip' + (MODE === 'daily' ? ' on' : '') + '" href="?mode=daily">Daily</a>' +
+        '<a class="chip' + (MODE === 'infinite' ? ' on' : '') + '" href="?mode=infinite">Endless</a>' +
+      '</div>' +
+    '</div>' +
+    '<div id="banner"></div>' +
+    '<div class="stat-row">' + BB.statRow([
+      { id: 'st-wins', label: 'Wins', value: store.wins, hl: true },
+      { id: 'st-played', label: 'Played', value: store.played },
+      { id: 'st-perfect', label: 'Clean', value: store.perfect },
+      { id: 'st-best', label: 'Record', value: '—' }
+    ]) + '</div>' +
+    '<div class="board-area">' +
+      '<div class="cboard" id="board"></div>' +
+      '<div class="lives" id="lives"></div>' +
+      '<p class="msg-line" id="msg"></p>' +
+      '<div class="cactions">' +
+        '<button class="btn btn-ghost btn-sm" id="shuffle"><span>Shuffle</span></button>' +
+        '<button class="btn btn-ghost btn-sm" id="clear"><span>Clear</span></button>' +
+        '<button class="btn btn-sm" id="go" disabled><span>Submit</span></button>' +
+      '</div>' +
+    '</div>';
+
+  var boardEl = document.getElementById('board');
+  var msgEl = document.getElementById('msg');
+  var goBtn = document.getElementById('go');
+
+  function shuffleArr(a, rand) {
+    var r = rand || Math.random;
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(r() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function newGame() {
+    var rand = MODE === 'daily' ? BB.rng('connections:' + BB.puzzleNumber()) : null;
+    puzzle = BBDATA.makeConnectionsPuzzle(rand);
+    tiles = shuffleArr(puzzle.reduce(function (acc, g, gi) {
+      return acc.concat(g.words.map(function (w) { return { word: w, group: gi }; }));
+    }, []), rand);
+    selected = []; solved = []; mistakes = 0; over = false;
+    msgEl.textContent = '';
+    render(); paintLives();
+  }
+
+  function render() {
+    var html = solved.map(function (gi) {
+      var g = puzzle[gi];
+      return '<div class="solved" style="background:' + COLORS[gi] + '">' +
+        '<div class="cat">' + g.cat + '</div><div class="ws">' + g.words.join(' · ') + '</div></div>';
+    }).join('');
+    var left = tiles.filter(function (t) { return solved.indexOf(t.group) === -1; });
+    for (var i = 0; i < left.length; i += 4) {
+      html += '<div class="crow">' + left.slice(i, i + 4).map(function (t) {
+        return '<div class="cword' + (selected.indexOf(t.word) > -1 ? ' on' : '') + '" data-w="' + t.word + '">' + t.word + '</div>';
+      }).join('') + '</div>';
+    }
+    boardEl.innerHTML = html;
+    goBtn.disabled = selected.length !== 4 || over;
+  }
+
+  function paintLives() {
+    document.getElementById('lives').innerHTML =
+      '<span class="muted" style="font-size:.78rem;margin-right:3px">Mistakes left</span>' +
+      Array.from({ length: MAX_MISTAKES }, function (_, i) {
+        return '<span class="life' + (i < mistakes ? ' gone' : '') + '"></span>';
+      }).join('');
+  }
+
+  function banner(html) { document.getElementById('banner').innerHTML = html; }
+  function startCountdown() {
+    clearInterval(cdTimer);
+    function paint() {
+      var el = document.getElementById('cd');
+      if (!el) return clearInterval(cdTimer);
+      el.textContent = BB.countdownText(BB.msUntilTomorrow());
+    }
+    paint();
+    cdTimer = setInterval(paint, 1000);
+  }
+
+  function lockDaily(result) {
+    over = true;
+    puzzle.forEach(function (_, i) { if (solved.indexOf(i) === -1) solved.push(i); });
+    selected = [];
+    render();
+    banner('<div class="daily-banner">' +
+      '<b>' + (result.won ? (result.mistakes === 0 ? 'Solved clean' : 'Solved with ' + result.mistakes) : 'Missed it') + '</b>' +
+      '<span class="muted">Today\'s groups are shown below.</span>' +
+      '<span style="margin-left:auto">Next in <span class="countdown-num" id="cd">--:--:--</span></span></div>');
+    startCountdown();
+    msgEl.innerHTML = 'Come back tomorrow, or <a href="?mode=infinite" style="text-decoration:underline">play endless</a>.';
+  }
+
+  boardEl.addEventListener('click', function (e) {
+    var el = e.target.closest('.cword');
+    if (!el || over) return;
+    var w = el.getAttribute('data-w');
+    var i = selected.indexOf(w);
+    if (i > -1) selected.splice(i, 1);
+    else if (selected.length < 4) selected.push(w);
+    else return BB.toast('Four at a time');
+    render();
+  });
+
+  document.getElementById('clear').addEventListener('click', function () { selected = []; render(); });
+  document.getElementById('shuffle').addEventListener('click', function () {
+    shuffleArr(tiles); render();
+    document.querySelectorAll('.cword').forEach(function (el, i) {
+      setTimeout(function () { el.classList.add('bump'); setTimeout(function () { el.classList.remove('bump'); }, 380); }, i * 20);
+    });
+  });
+
+  goBtn.addEventListener('click', function () {
+    if (selected.length !== 4 || over) return;
+    var picked = tiles.filter(function (t) { return selected.indexOf(t.word) > -1; });
+    var groups = {};
+    picked.forEach(function (t) { groups[t.group] = (groups[t.group] || 0) + 1; });
+    var gi = Object.keys(groups).find(function (k) { return groups[k] === 4; });
+
+    if (gi !== undefined) {
+      solved.push(Number(gi));
+      selected = [];
+      render();
+      if (solved.length === 4) return win();
+      msgEl.textContent = 'Correct';
+      setTimeout(function () { if (!over) msgEl.textContent = ''; }, 1400);
+      return;
+    }
+
+    var top = Math.max.apply(null, Object.values(groups));
+    mistakes++;
+    paintLives();
+    document.querySelectorAll('.cword.on').forEach(function (el) {
+      el.classList.add('shake');
+      setTimeout(function () { el.classList.remove('shake'); }, 460);
+    });
+    msgEl.textContent = top === 3 ? 'One away' : 'Not a group';
+    setTimeout(function () { if (!over) msgEl.textContent = ''; }, 1700);
+    if (mistakes >= MAX_MISTAKES) setTimeout(lose, 500);
+  });
+
+  async function win() {
+    over = true;
+    store.wins++; store.played++;
+    if (mistakes === 0) store.perfect++;
+    BB.lsSet('bb_conn', store);
+    BB.setStat('st-wins', store.wins);
+    BB.setStat('st-played', store.played);
+    BB.setStat('st-perfect', store.perfect);
+    if (MODE === 'daily') { BB.saveDaily(KEY, { won: true, mistakes: mistakes }); finishDailyBanner(true); }
+    var res = await BB.finish(KEY, store.wins, { mistakes: mistakes, mode: MODE });
+    BB.setStat('st-best', BB.bestFor(KEY));
+    BB.resultPanel({
+      game: KEY,
+      title: mistakes === 0 ? 'Clean sweep' : 'Solved',
+      value: store.wins,
+      sub: mistakes === 0 ? 'Four groups, no mistakes.' : 'Solved with ' + mistakes + ' mistake' + (mistakes === 1 ? '' : 's') + '.',
+      isBest: res.newBest,
+      againLabel: MODE === 'daily' ? 'Play endless' : 'Next puzzle',
+      onAgain: function () { if (MODE === 'daily') location.href = '?mode=infinite'; else newGame(); }
+    });
+  }
+
+  function finishDailyBanner(won) {
+    banner('<div class="daily-banner">' +
+      '<b>' + (won ? 'Done for today' : 'Missed it') + '</b>' +
+      '<span style="margin-left:auto">Next in <span class="countdown-num" id="cd">--:--:--</span></span></div>');
+    startCountdown();
+  }
+
+  function lose() {
+    over = true;
+    store.played++;
+    BB.lsSet('bb_conn', store);
+    BB.setStat('st-played', store.played);
+    puzzle.forEach(function (_, i) { if (solved.indexOf(i) === -1) solved.push(i); });
+    selected = [];
+    render();
+    if (MODE === 'daily') { BB.saveDaily(KEY, { won: false, mistakes: mistakes }); finishDailyBanner(false); }
+    msgEl.textContent = 'Out of mistakes.';
+    BB.resultPanel({
+      game: KEY,
+      title: 'Out of mistakes',
+      value: '—',
+      sub: 'The four groups are on the board.',
+      againLabel: MODE === 'daily' ? 'Play endless' : 'Try another',
+      onAgain: function () { if (MODE === 'daily') location.href = '?mode=infinite'; else newGame(); }
+    });
+  }
+
+  var ng = document.getElementById('newgame');
+  if (ng) ng.addEventListener('click', function () {
+    if (!over && (solved.length || mistakes) && !confirm('Start a new puzzle?')) return;
+    if (!over && (solved.length || mistakes)) { store.played++; BB.lsSet('bb_conn', store); BB.setStat('st-played', store.played); }
+    newGame();
+  });
+
+  document.getElementById('how').addEventListener('click', function () {
+    BB.modal('<button class="modal-close" data-close>' + BB.ICON.x + '</button>' +
+      '<h2>How to play</h2>' +
+      '<p class="sub">Sixteen words hide four groups of four. Select a group, then submit.</p>' +
+      '<div class="mt-3" style="display:grid;gap:8px;font-size:.9rem;color:var(--text-2)">' +
+        '<div>Every word belongs to one group only.</div>' +
+        '<div>Four mistakes and the puzzle ends.</div>' +
+        '<div>Three right out of four shows "one away".</div>' +
+      '</div>' +
+      '<p class="hint mt-3">Daily is the same puzzle for everyone. Endless keeps generating new ones.</p>' +
+      '<button class="btn btn-block mt-3" data-close><span>Got it</span></button>');
+  });
+
+  newGame();
+
+  if (MODE === 'daily') {
+    var done = BB.dailyResult(KEY);
+    if (done) lockDaily(done);
+    else banner('<div class="daily-banner"><b>Daily puzzle #' + BB.puzzleNumber() + '</b>' +
+      '<span class="muted">Same groups for everyone today</span></div>');
+  }
+
+  BB.gameInit(KEY, 'mount', null, function () {
+    var b = BB.bestFor(KEY);
+    BB.setStat('st-best', b !== undefined ? b : 0);
+  });
+})();
+</script>
+</body>
+</html>

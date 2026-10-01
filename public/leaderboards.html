@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leaderboards — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%235b5bd6'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='white'>BB</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .board {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 18px 8px;
+    transition: transform .35s var(--ease), box-shadow .35s var(--ease);
+  }
+  .board:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+  .board-head { display: flex; align-items: center; gap: 10px; padding: 0 10px 14px; }
+  .board-head .g {
+    width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--tile) 16%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--tile) 26%, transparent);
+  }
+  .board-head b { font-size: 1rem; letter-spacing: -.02em; }
+  .board-head span { display: block; font-size: .76rem; color: var(--muted); }
+  .boards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="kicker">Hall of fame</div>
+          <h2>Leaderboards</h2>
+          <p>Top five per game, on personal best.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="refresh">Refresh</button>
+      </div>
+      <div class="boards" id="boards" data-stagger="60">
+        <div class="empty">Loading leaderboards…</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script>
+(function () {
+  var MEDAL = ['🥇', '🥈', '🥉'];
+
+  async function load() {
+    var box = document.getElementById('boards');
+    try {
+      var d = await BB.api('/api/leaderboards');
+      var me = BB.user && BB.user.username;
+      box.innerHTML = Object.keys(BB.GAMES).map(function (k, i) {
+        var g = BB.GAMES[k];
+        var rows = d.boards[k] || [];
+        return '<div class="board reveal reveal-scale" style="--tile:' + g.color + ';--d:' + (i * 55) + 'ms">' +
+          '<div class="board-head"><div class="g">' + g.glyph + '</div>' +
+          '<div><b>' + g.name + '</b><span>Ranked by ' + g.unit + '</span></div>' +
+          '<a class="btn btn-quiet btn-sm" style="margin-left:auto" href="' + g.href + '">Play</a></div>' +
+          (rows.length
+            ? '<table class="lb-table"><tbody>' + rows.map(function (r, j) {
+                return '<tr' + (r.username === me ? ' class="me"' : '') + '>' +
+                  '<td class="rank">' + (MEDAL[j] ? '<span class="medal">' + MEDAL[j] + '</span>' : j + 1) + '</td>' +
+                  '<td>' + r.username + '</td>' +
+                  '<td class="score">' + g.fmt(r.score) + '</td></tr>';
+              }).join('') + '</tbody></table>'
+            : '<div class="empty">No scores yet.</div>') +
+          '</div>';
+      }).join('');
+      BB.initReveal();
+    } catch (e) {
+      box.innerHTML = '<div class="empty">Could not load leaderboards.</div>';
+    }
+  }
+
+  document.getElementById('refresh').addEventListener('click', load);
+  BB.init({ active: 'leaderboards' }).then(load);
+})();
+</script>
+</body>
+</html>

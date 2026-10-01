@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reaction Time — BensBenchmark</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23c9962a'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='white'>R</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .pad {
+    min-height: 340px;
+    border-radius: var(--radius);
+    display: grid;
+    place-items: center;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+    padding: 30px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    transition: background .14s, border-color .14s;
+  }
+  .pad.wait { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+  .pad.go { background: var(--good); border-color: var(--good); color: #fff; }
+  .pad h2 { font-size: clamp(1.3rem, 4.2vw, 1.9rem); font-family: var(--font-display); font-weight: 600; }
+  .pad p { margin-top: 8px; font-size: .95rem; opacity: .85; }
+  .pad .big { font-size: clamp(2.6rem, 9vw, 4rem); font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .pad.go h2, .pad.go p { color: #fff; }
+  .trials { display: flex; gap: 7px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+  .trial {
+    min-width: 62px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-size: .82rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    color: var(--muted);
+  }
+  .trial.done { background: var(--surface); color: var(--text); border-color: var(--border-mid); animation: popIn .32s var(--ease); }
+  @keyframes popIn { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+</style>
+</head>
+<body>
+<main>
+  <section class="game-shell">
+    <div class="wrap" style="max-width:620px" id="mount"></div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/game-shell.js"></script>
+<script>
+(function () {
+  var KEY = 'reaction';
+  var TRIALS = 5;
+  var times = [], state = 'idle', goAt = 0, timer = null;
+
+  document.getElementById('mount').innerHTML =
+    BB.gameHead(KEY, '<button class="btn btn-ghost btn-sm" id="restart">Restart</button>') +
+    '<div class="stat-row">' + BB.statRow([
+      { id: 'st-last', label: 'Last', value: '—', hl: true },
+      { id: 'st-avg', label: 'Average', value: '—' },
+      { id: 'st-trial', label: 'Attempt', value: '1 / ' + TRIALS },
+      { id: 'st-best', label: 'Best average', value: '—' }
+    ]) + '</div>' +
+    '<div class="board-area">' +
+      '<div class="pad" id="pad"><div>' +
+        '<h2 id="pad-title">Ready?</h2>' +
+        '<p id="pad-sub">Click when the box turns green. Five tries, averaged.</p>' +
+      '</div></div>' +
+      '<div class="trials" id="trials"></div>' +
+    '</div>';
+
+  var pad = document.getElementById('pad');
+  var title = document.getElementById('pad-title');
+  var sub = document.getElementById('pad-sub');
+
+  function paintTrials() {
+    document.getElementById('trials').innerHTML = Array.from({ length: TRIALS }, function (_, i) {
+      return '<div class="trial' + (times[i] !== undefined ? ' done' : '') + '">' +
+        (times[i] !== undefined ? times[i] + ' ms' : '—') + '</div>';
+    }).join('');
+  }
+
+  function setPad(cls, t, s) {
+    pad.className = 'pad' + (cls ? ' ' + cls : '');
+    title.innerHTML = t;
+    sub.innerHTML = s || '';
+  }
+
+  function arm() {
+    state = 'waiting';
+    setPad('wait', 'Wait for green…', 'Not yet.');
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      state = 'go';
+      goAt = performance.now();
+      setPad('go', 'Click!', '');
+    }, 1200 + Math.random() * 3200);
+  }
+
+  function hit() {
+    if (state === 'idle' || state === 'result') return arm();
+    if (state === 'waiting') {
+      clearTimeout(timer);
+      state = 'early';
+      setPad('', 'Too soon', 'Click to try that one again.');
+      return;
+    }
+    if (state === 'early') return arm();
+    if (state !== 'go') return;
+
+    var ms = Math.round(performance.now() - goAt);
+    times.push(ms);
+    paintTrials();
+    BB.setStat('st-last', ms + ' ms');
+    BB.setStat('st-avg', Math.round(times.reduce(function (a, b) { return a + b; }, 0) / times.length) + ' ms');
+    BB.setStat('st-trial', Math.min(times.length + 1, TRIALS) + ' / ' + TRIALS);
+
+    if (times.length >= TRIALS) return end();
+    state = 'result';
+    setPad('', '<span class="big">' + ms + '<span style="font-size:.4em;font-weight:600"> ms</span></span>',
+      'Attempt ' + times.length + ' of ' + TRIALS + '. Click to keep going.');
+  }
+
+  async function end() {
+    state = 'done';
+    var avg = Math.round(times.reduce(function (a, b) { return a + b; }, 0) / times.length);
+    var fastest = Math.min.apply(null, times);
+    setPad('', '<span class="big">' + avg + '<span style="font-size:.4em;font-weight:600"> ms</span></span>', 'Average of ' + TRIALS + ' attempts.');
+    var res = await BB.finish(KEY, avg, { fastest: fastest });
+    BB.setStat('st-best', BB.bestFor(KEY) + ' ms');
+
+    var grade = avg < 200 ? 'Very fast.'
+      : avg < 250 ? 'Quicker than most.'
+      : avg < 300 ? 'About average.'
+      : avg < 400 ? 'A bit slow. Rest your finger on the mouse.'
+      : 'Have another go.';
+
+    BB.resultPanel({
+      game: KEY,
+      title: 'Average reaction',
+      value: avg + ' <span style="font-size:1.1rem;font-weight:600">ms</span>',
+      sub: grade,
+      isBest: res.newBest,
+      extraHtml: '<div class="stat-row mt-3" style="margin-bottom:0">' + BB.statRow([
+        { id: 'r-fast', label: 'Fastest', value: fastest + ' ms' },
+        { id: 'r-slow', label: 'Slowest', value: Math.max.apply(null, times) + ' ms' }
+      ]) + '</div>',
+      onAgain: restart
+    });
+  }
+
+  function restart() {
+    clearTimeout(timer);
+    times = []; state = 'idle';
+    BB.setStat('st-last', '—');
+    BB.setStat('st-avg', '—');
+    BB.setStat('st-trial', '1 / ' + TRIALS);
+    setPad('', 'Ready?', 'Click when the box turns green. Five tries, averaged.');
+    paintTrials();
+  }
+
+  pad.addEventListener('mousedown', function (e) { e.preventDefault(); hit(); });
+  pad.addEventListener('touchstart', function (e) { e.preventDefault(); hit(); }, { passive: false });
+  document.addEventListener('keydown', function (e) {
+    if (document.querySelector('.modal-back')) return;
+    if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); hit(); }
+  });
+  document.getElementById('restart').addEventListener('click', restart);
+
+  restart();
+  BB.gameInit(KEY, 'mount', null, function () {
+    var b = BB.bestFor(KEY);
+    BB.setStat('st-best', b !== undefined ? b + ' ms' : '—');
+  });
+})();
+</script>
+</body>
+</html>

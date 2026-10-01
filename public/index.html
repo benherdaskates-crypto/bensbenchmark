@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BensBenchmark</title>
+<meta name="description" content="Wordle, Connections, Hangman and speed tests. Daily puzzles and endless ones.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23121212'/><text y='66' x='50' text-anchor='middle' font-size='46' font-family='Helvetica,sans-serif' font-weight='bold' fill='white'>BB</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main>
+
+  <section class="hero">
+    <div class="wrap">
+      <h1 class="reveal" style="--d:70ms">A puzzle a day.<br>Or a hundred.</h1>
+      <p class="hero-sub reveal" style="--d:140ms">
+        Wordle, Connections and Hangman, plus speed and memory tests. Play the daily one, then keep going.
+      </p>
+      <div class="hero-cta reveal" style="--d:210ms">
+        <a class="btn btn-lg" href="/games/wordle?mode=daily&len=5"><span>Today's Wordle</span></a>
+        <a class="btn btn-ghost btn-lg" href="/play"><span>Play a friend</span></a>
+      </div>
+      <button class="scroll-cue reveal" id="cue-games" style="--d:280ms">
+        <span>The games</span>
+        <span id="cue-icon"></span>
+      </button>
+    </div>
+  </section>
+
+  <section class="section" id="games">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="kicker">Word</div>
+          <h2>Play today's, then play again</h2>
+          <p>Tap the arrow on a card for daily puzzles, word lengths and endless mode.</p>
+        </div>
+        <a class="btn btn-ghost btn-sm" href="/leaderboards"><span>Leaderboards</span></a>
+      </div>
+      <div class="card-grid" id="grid-word"></div>
+    </div>
+  </section>
+
+  <section class="section section-tint">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="kicker">Benchmarks</div>
+          <h2>Put a number on it</h2>
+          <p>Reaction, aim, typing and three kinds of memory.</p>
+        </div>
+      </div>
+      <div class="card-grid" id="grid-bench"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="kicker">Party codes</div>
+          <h2>Race someone</h2>
+          <p>Make a code, send it to a friend, play the same puzzle at the same time.</p>
+        </div>
+        <a class="btn btn-sm" href="/play"><span>Start a game</span></a>
+      </div>
+      <div class="steps" data-stagger="90">
+        <div class="step reveal"><div class="step-n">1</div><h3>Make a room</h3><p>You get a four-letter code.</p></div>
+        <div class="step reveal"><div class="step-n">2</div><h3>Send the code</h3><p>They type it in. No account needed.</p></div>
+        <div class="step reveal"><div class="step-n">3</div><h3>Go</h3><p>Same puzzle, live scores, one winner.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-tint" id="request">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="kicker">Requests</div>
+          <h2>Want another game?</h2>
+          <p>Say which one and it comes straight to me.</p>
+        </div>
+      </div>
+      <div class="card reveal reveal-scale" style="max-width:560px">
+        <form id="request-form">
+          <div id="request-msg"></div>
+          <div class="field" id="name-field">
+            <label for="rq-name">Your name</label>
+            <input class="input" id="rq-name" maxlength="40" placeholder="Optional" autocomplete="nickname">
+          </div>
+          <div class="field">
+            <label for="rq-message">Which game?</label>
+            <textarea class="input" id="rq-message" maxlength="1000" required placeholder="Minesweeper, 2048, Sudoku…"></textarea>
+            <div class="hint"><span id="rq-count">0</span>/1000</div>
+          </div>
+          <button class="btn btn-block" type="submit" id="rq-submit"><span>Send</span></button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/data.js"></script>
+<script src="/js/words.js"></script>
+<script>
+(function () {
+  document.getElementById('cue-icon').innerHTML = BB.ICON.down;
+
+  var WORD = ['wordle', 'connections', 'hangman'];
+  var BENCH = ['typing', 'reaction', 'aim', 'number', 'sequence', 'verbal'];
+  document.getElementById('grid-word').innerHTML = WORD.map(BB.gameCard).join('');
+  document.getElementById('grid-bench').innerHTML = BENCH.map(BB.gameCard).join('');
+  BB.wireCards();
+
+  document.getElementById('cue-games').addEventListener('click', function () {
+    document.getElementById('games').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  BB.init({ active: 'home', playerCount: true }).then(function (user) {
+    if (user) document.getElementById('name-field').classList.add('hidden');
+  });
+  BB.initReveal();
+
+  var ta = document.getElementById('rq-message');
+  ta.addEventListener('input', function () { document.getElementById('rq-count').textContent = ta.value.length; });
+
+  document.getElementById('request-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var box = document.getElementById('request-msg');
+    var btn = document.getElementById('rq-submit');
+    btn.disabled = true;
+    try {
+      await BB.api('/api/request', {
+        method: 'POST',
+        body: JSON.stringify({ name: document.getElementById('rq-name').value, message: ta.value })
+      });
+      box.innerHTML = '<div class="notice notice-good">Sent. Thanks.</div>';
+      e.target.reset();
+      document.getElementById('rq-count').textContent = '0';
+    } catch (err) {
+      box.innerHTML = '<div class="notice notice-bad">' + err.message + '</div>';
+    }
+    btn.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>
