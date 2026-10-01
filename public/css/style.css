@@ -20,6 +20,8 @@
   --green: #6aaa64;
   --yellow: #c9b458;
   --grey: #a8a8a3;
+  --key-used: #b4b4ae;
+  --key-used-text: #ffffff;
 
   --good: #3a8a4a;
   --good-soft: #eaf3ea;
@@ -55,6 +57,8 @@
   --accent-text: #121212;
   --pop: #8ba6e8;
   --grey: #4a4a46;
+  --key-used: #191919;
+  --key-used-text: #5e5e5a;
   --good: #6aaa64;
   --good-soft: #1c2a1c;
   --bad: #e06055;
@@ -611,7 +615,7 @@ textarea.input { resize: vertical; min-height: 104px; }
 .key.wide { max-width: 68px; flex: 1.5 1 auto; font-size: .68rem; }
 .key.correct { background: var(--green); color: #fff; }
 .key.present { background: var(--yellow); color: #fff; }
-.key.absent { background: var(--grey); color: #fff; }
+.key.absent { background: var(--key-used); color: var(--key-used-text); }
 
 /* ---------------- Leaderboard ---------------- */
 .lb-table { width: 100%; border-collapse: collapse; font-size: .89rem; }
