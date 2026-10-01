@@ -156,7 +156,8 @@ function limit(key, max, windowMs) {
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,16}$/;
 
 app.post('/api/register', (req, res) => {
-  if (!limit('reg:' + req.ip, 10, 10 * 60e3)) return res.status(429).json({ error: 'Too many attempts, try again later' });
+  // A whole class shares one school IP, so this is deliberately roomy.
+  if (!limit('reg:' + req.ip, 60, 10 * 60e3)) return res.status(429).json({ error: 'Too many new accounts from here, wait a few minutes' });
   const { username = '', password = '' } = req.body || {};
   if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Username must be 3-16 letters, numbers or underscores' });
   if (typeof password !== 'string' || password.length < 4 || password.length > 72) return res.status(400).json({ error: 'Password must be at least 4 characters' });
@@ -168,9 +169,13 @@ app.post('/api/register', (req, res) => {
 });
 
 app.post('/api/login', (req, res) => {
-  if (!limit('login:' + req.ip, 20, 10 * 60e3)) return res.status(429).json({ error: 'Too many attempts, try again later' });
   const { username = '', password = '' } = req.body || {};
-  const user = db.users.find((u) => u.username.toLowerCase() === String(username).toLowerCase());
+  // Guessing is capped per account, which is the thing worth protecting.
+  // The per-IP cap stays loose so a shared school connection still works.
+  const who = String(username).toLowerCase().slice(0, 32);
+  if (!limit('login:' + req.ip, 200, 10 * 60e3)) return res.status(429).json({ error: 'Too many attempts from here, wait a few minutes' });
+  if (!limit('user:' + who, 10, 10 * 60e3)) return res.status(429).json({ error: 'Too many tries for that account, wait a few minutes' });
+  const user = db.users.find((u) => u.username.toLowerCase() === who);
   if (!user || !verifyPassword(String(password), user.passwordHash)) return res.status(401).json({ error: 'Wrong username or password' });
   createSession(res, req, user);
   res.json({ user: publicUser(user) });
