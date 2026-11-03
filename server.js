@@ -25,29 +25,16 @@ try {
 } catch {}
 
 const PORT = process.env.PORT || 3000;
-const DATA_DIR = path.join(__dirname, 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
 const SESSION_DAYS = 90; // how long a remembered device stays logged in
 
-// ---------- Tiny JSON database ----------
-let db = { users: [], sessions: [], requests: [], dailyStats: {} };
-function loadDb() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (fs.existsSync(DB_FILE)) {
-    try { db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch (e) { console.error('Could not read db.json, starting fresh', e); }
-  }
-}
-let saveTimer = null;
-function saveDb() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fs.writeFile(DB_FILE + '.tmp', JSON.stringify(db, null, 2), (err) => {
-      if (err) return console.error('save failed', err);
-      fs.rename(DB_FILE + '.tmp', DB_FILE, (e) => e && console.error('rename failed', e));
-    });
-  }, 150);
-}
-loadDb();
+// ---------- Storage ----------
+// Postgres when DATABASE_URL is set, otherwise a local JSON file.
+const storage = require('./storage');
+let store = null;
+
+// Express 4 does not catch rejected promises, so every async route goes
+// through this.
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // ---------- Password hashing (built-in scrypt) ----------
 function hashPassword(password) {
@@ -86,39 +73,44 @@ app.use(compression({ filter: (req, res) => !req.path.endsWith('/events') && com
 app.use(express.json({ limit: '50kb' }));
 app.use(cookieParser());
 
-// Attach user from device cookie
-app.use((req, res, next) => {
+// Attach the signed-in user from the device cookie.
+// Only on /api, so serving a stylesheet never touches the database.
+app.use('/api', wrap(async (req, res, next) => {
   req.user = null;
   const token = req.cookies.sg_device;
   if (token) {
     const th = sha(token);
-    const s = db.sessions.find((x) => x.tokenHash === th);
+    const s = await store.sessions.byHash(th);
     if (s && s.expires > Date.now()) {
-      const u = db.users.find((x) => x.id === s.userId);
+      const u = await store.users.byId(s.userId);
       if (u) {
         req.user = u;
         req.session = s;
-        // sliding expiry + last seen
-        s.lastSeen = Date.now();
-        s.expires = Date.now() + SESSION_DAYS * 864e5;
-        u.lastSeen = Date.now();
-        saveDb();
+        // Sliding expiry, written at most once a minute per device so a
+        // burst of requests does not become a burst of writes.
+        const now = Date.now();
+        if (now - s.lastSeen > 60e3) {
+          s.lastSeen = now;
+          s.expires = now + SESSION_DAYS * 864e5;
+          u.lastSeen = now;
+          await store.sessions.touch(s);
+          await store.users.touch(u.id, now);
+        }
       }
     } else if (s) {
-      db.sessions = db.sessions.filter((x) => x !== s);
-      saveDb();
+      await store.sessions.remove(s.id);
     }
   }
   next();
-});
+}));
 
 function publicUser(u) {
   return { id: u.id, username: u.username, created: u.created, best: u.best || {}, history: u.history || {} };
 }
-function createSession(res, req, user) {
+async function createSession(res, req, user) {
   const token = crypto.randomBytes(32).toString('hex');
   const ua = (req.headers['user-agent'] || '').slice(0, 200);
-  db.sessions.push({
+  await store.sessions.create({
     id: crypto.randomBytes(8).toString('hex'),
     userId: user.id,
     tokenHash: sha(token),
@@ -127,7 +119,6 @@ function createSession(res, req, user) {
     lastSeen: Date.now(),
     expires: Date.now() + SESSION_DAYS * 864e5,
   });
-  saveDb();
   res.cookie('sg_device', token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -155,66 +146,83 @@ function limit(key, max, windowMs) {
 // ---------- Auth ----------
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,16}$/;
 
-app.post('/api/register', (req, res) => {
+app.post('/api/register', wrap(async (req, res) => {
   // A whole class shares one school IP, so this is deliberately roomy.
   if (!limit('reg:' + req.ip, 60, 10 * 60e3)) return res.status(429).json({ error: 'Too many new accounts from here, wait a few minutes' });
   const { username = '', password = '' } = req.body || {};
   if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Username must be 3-16 letters, numbers or underscores' });
   if (typeof password !== 'string' || password.length < 4 || password.length > 72) return res.status(400).json({ error: 'Password must be at least 4 characters' });
-  if (db.users.some((u) => u.username.toLowerCase() === username.toLowerCase())) return res.status(409).json({ error: 'That username is taken' });
-  const user = { id: crypto.randomBytes(8).toString('hex'), username, passwordHash: hashPassword(password), created: Date.now(), lastSeen: Date.now(), best: {}, history: {} };
-  db.users.push(user);
-  createSession(res, req, user);
+  const user = {
+    id: crypto.randomBytes(8).toString('hex'),
+    username,
+    passwordHash: hashPassword(password),
+    created: Date.now(),
+    lastSeen: Date.now(),
+    best: {},
+    history: {},
+  };
+  try {
+    await store.users.create(user);
+  } catch (e) {
+    if (e.taken) return res.status(409).json({ error: 'That username is taken' });
+    throw e;
+  }
+  await createSession(res, req, user);
   res.json({ user: publicUser(user) });
-});
+}));
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', wrap(async (req, res) => {
   const { username = '', password = '' } = req.body || {};
   // Guessing is capped per account, which is the thing worth protecting.
   // The per-IP cap stays loose so a shared school connection still works.
   const who = String(username).toLowerCase().slice(0, 32);
   if (!limit('login:' + req.ip, 200, 10 * 60e3)) return res.status(429).json({ error: 'Too many attempts from here, wait a few minutes' });
   if (!limit('user:' + who, 10, 10 * 60e3)) return res.status(429).json({ error: 'Too many tries for that account, wait a few minutes' });
-  const user = db.users.find((u) => u.username.toLowerCase() === who);
+  const user = await store.users.byLower(who);
   if (!user || !verifyPassword(String(password), user.passwordHash)) return res.status(401).json({ error: 'Wrong username or password' });
-  createSession(res, req, user);
+  await createSession(res, req, user);
   res.json({ user: publicUser(user) });
-});
+}));
 
-app.post('/api/logout', (req, res) => {
-  if (req.session) { db.sessions = db.sessions.filter((s) => s !== req.session); saveDb(); }
+app.post('/api/logout', wrap(async (req, res) => {
+  if (req.session) await store.sessions.remove(req.session.id);
   res.clearCookie('sg_device');
   res.json({ ok: true });
-});
+}));
 
 app.get('/api/me', (req, res) => {
   res.json({ user: req.user ? publicUser(req.user) : null });
 });
 
-app.get('/api/devices', requireAuth, (req, res) => {
-  const list = db.sessions.filter((s) => s.userId === req.user.id).map((s) => ({ id: s.id, device: s.device, created: s.created, lastSeen: s.lastSeen, current: s === req.session }));
-  res.json({ devices: list });
-});
-app.delete('/api/devices/:id', requireAuth, (req, res) => {
-  const s = db.sessions.find((x) => x.id === req.params.id && x.userId === req.user.id);
+app.get('/api/devices', requireAuth, wrap(async (req, res) => {
+  const all = await store.sessions.byUser(req.user.id);
+  res.json({
+    devices: all.map((s) => ({
+      id: s.id, device: s.device, created: s.created, lastSeen: s.lastSeen,
+      current: !!req.session && s.id === req.session.id,
+    })),
+  });
+}));
+app.delete('/api/devices/:id', requireAuth, wrap(async (req, res) => {
+  const all = await store.sessions.byUser(req.user.id);
+  const s = all.find((x) => x.id === req.params.id);
   if (!s) return res.status(404).json({ error: 'Not found' });
-  db.sessions = db.sessions.filter((x) => x !== s);
-  saveDb();
-  if (s === req.session) res.clearCookie('sg_device');
+  await store.sessions.remove(s.id);
+  if (req.session && s.id === req.session.id) res.clearCookie('sg_device');
   res.json({ ok: true });
-});
+}));
 
-app.post('/api/change-password', requireAuth, (req, res) => {
+app.post('/api/change-password', requireAuth, wrap(async (req, res) => {
   const { current = '', next = '' } = req.body || {};
   if (!verifyPassword(String(current), req.user.passwordHash)) return res.status(401).json({ error: 'Current password is wrong' });
   if (typeof next !== 'string' || next.length < 4 || next.length > 72) return res.status(400).json({ error: 'New password must be at least 4 characters' });
   req.user.passwordHash = hashPassword(next);
-  saveDb();
+  await store.users.save(req.user);
   res.json({ ok: true });
-});
+}));
 
 // ---------- Stats ----------
-app.post('/api/score', requireAuth, (req, res) => {
+app.post('/api/score', requireAuth, wrap(async (req, res) => {
   const { game, score, meta } = req.body || {};
   const g = GAMES[game];
   if (!g) return res.status(400).json({ error: 'Unknown game' });
@@ -230,85 +238,73 @@ app.post('/api/score', requireAuth, (req, res) => {
   if (better) u.best[game] = n;
   const h = (u.history[game] = u.history[game] || []);
   h.push({ s: n, t: Date.now(), m: meta && typeof meta === 'object' ? meta : undefined });
-  if (h.length > 100) h.splice(0, h.length - 100);
-  saveDb();
+  if (h.length > storage.HISTORY_CAP) h.splice(0, h.length - storage.HISTORY_CAP);
+  await store.users.save(u);
   res.json({ best: u.best[game], newBest: better });
-});
+}));
 
-app.get('/api/leaderboard/:game', (req, res) => {
+app.get('/api/leaderboard/:game', wrap(async (req, res) => {
   const g = GAMES[req.params.game];
   if (!g) return res.status(400).json({ error: 'Unknown game' });
-  const rows = db.users
+  const rows = (await store.users.leaderboard())
     .filter((u) => u.best && u.best[req.params.game] !== undefined)
     .map((u) => ({ username: u.username, score: u.best[req.params.game] }))
     .sort((a, b) => (g.dir === 'high' ? b.score - a.score : a.score - b.score))
     .slice(0, 10);
   res.json({ game: g, rows });
-});
+}));
 
-app.get('/api/leaderboards', (req, res) => {
+app.get('/api/leaderboards', wrap(async (req, res) => {
+  const everyone = await store.users.leaderboard();
   const out = {};
   for (const key of Object.keys(GAMES)) {
     const g = GAMES[key];
-    out[key] = db.users
+    out[key] = everyone
       .filter((u) => u.best && u.best[key] !== undefined)
       .map((u) => ({ username: u.username, score: u.best[key] }))
       .sort((a, b) => (g.dir === 'high' ? b.score - a.score : a.score - b.score))
       .slice(0, 5);
   }
   res.json({ games: GAMES, boards: out });
-});
+}));
 
 // ---------- Daily puzzle results, pooled across everyone ----------
 // Key looks like "wordle:5:12" (game, word length, puzzle number).
 const DAILY_KEY = /^[a-z]+:\d{1,2}:\d{1,6}$/;
 
-app.post('/api/daily-result', (req, res) => {
+app.post('/api/daily-result', wrap(async (req, res) => {
   if (!limit('daily:' + req.ip, 60, 60 * 60e3)) return res.status(429).json({ error: 'Too many results' });
   const { key, tries } = req.body || {};
   if (typeof key !== 'string' || !DAILY_KEY.test(key)) return res.status(400).json({ error: 'Bad key' });
   const n = Number(tries);
   if (!Number.isInteger(n) || n < 0 || n > 6) return res.status(400).json({ error: 'Bad result' });
 
-  db.dailyStats = db.dailyStats || {};
-  const row = (db.dailyStats[key] = db.dailyStats[key] || { t: [0, 0, 0, 0, 0, 0], fail: 0 });
-  if (n === 0) row.fail++;
-  else row.t[n - 1]++;
-
-  // keep only recent puzzles so the file cannot grow without end
-  const keys = Object.keys(db.dailyStats);
-  if (keys.length > 400) {
-    keys.sort((a, b) => Number(a.split(':')[2]) - Number(b.split(':')[2]));
-    keys.slice(0, keys.length - 400).forEach((k) => delete db.dailyStats[k]);
-  }
-  saveDb();
+  const row = await store.daily.bump(key, n);
   res.json({ stats: row });
-});
+}));
 
-app.get('/api/daily-stats/:key', (req, res) => {
+app.get('/api/daily-stats/:key', wrap(async (req, res) => {
   if (!DAILY_KEY.test(req.params.key)) return res.status(400).json({ error: 'Bad key' });
-  const row = (db.dailyStats || {})[req.params.key] || { t: [0, 0, 0, 0, 0, 0], fail: 0 };
+  const row = await store.daily.get(req.params.key);
   res.json({ stats: row, total: row.t.reduce((a, b) => a + b, 0) + row.fail });
-});
+}));
 
 // ---------- Community stats (for the home page footer) ----------
-app.get('/api/community', (req, res) => {
+app.get('/api/community', wrap(async (req, res) => {
   const now = Date.now();
-  const day = now - 864e5;
-  const recently = now - 5 * 60e3;
-  const totalGames = db.users.reduce((acc, u) => acc + Object.values(u.history || {}).reduce((a, h) => a + h.length, 0), 0);
+  const counts = await store.users.counts(now - 864e5, now - 5 * 60e3);
   // anyone in a party room counts as online even without an account
   const inRooms = new Set();
   for (const room of rooms.values()) {
     for (const p of room.players) if (now - p.lastSeen < PLAYER_IDLE_MS) inRooms.add(room.code + ':' + p.id);
   }
   res.json({
-    users: db.users.length,
-    activeToday: db.users.filter((u) => (u.lastSeen || 0) > day).length,
-    onlineNow: db.users.filter((u) => (u.lastSeen || 0) > recently).length + inRooms.size,
-    gamesPlayed: totalGames,
+    users: counts.total,
+    activeToday: counts.activeToday,
+    onlineNow: counts.onlineNow + inRooms.size,
+    gamesPlayed: counts.gamesPlayed,
   });
-});
+}));
 
 // ---------- Request a game ----------
 let mailer = null;
@@ -330,8 +326,7 @@ app.post('/api/request', async (req, res) => {
   const text = String(message).trim().slice(0, 1000);
   if (text.length < 5) return res.status(400).json({ error: 'Tell us a bit more about the game' });
   const entry = { id: crypto.randomBytes(6).toString('hex'), from, message: text, at: Date.now() };
-  db.requests.push(entry);
-  saveDb();
+  await store.requests.add(entry);
 
   const to = process.env.REQUEST_EMAIL;
   const m = getMailer();
@@ -347,10 +342,10 @@ app.post('/api/request', async (req, res) => {
 });
 
 // Simple admin view of requests: /api/requests?key=ADMIN_KEY
-app.get('/api/requests', (req, res) => {
+app.get('/api/requests', wrap(async (req, res) => {
   if (!process.env.ADMIN_KEY || req.query.key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
-  res.json({ requests: db.requests });
-});
+  res.json({ requests: await store.requests.all() });
+}));
 
 // ---------- Party rooms (in memory, live only while people are playing) ----------
 const rooms = new Map();
@@ -579,7 +574,20 @@ app.get('/games', (req, res) => res.sendFile(path.join(PUB, 'games.html')));
 app.use(express.static(PUB, { extensions: ['html'], redirect: false }));
 app.use((req, res) => res.status(404).sendFile(path.join(PUB, '404.html')));
 
-app.listen(PORT, () => {
-  console.log(`BensBenchmark running at http://localhost:${PORT}`);
-  if (!getMailer()) console.log('Email not configured yet: game requests are saved to data/db.json (see .env.example).');
+// Anything an async route throws lands here rather than killing the process.
+app.use((err, req, res, next) => {
+  console.error('Request failed:', req.method, req.path, '-', err.message);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Something went wrong on our end' });
+});
+
+storage.open().then((opened) => {
+  store = opened;
+  app.listen(PORT, () => {
+    console.log(`BensBenchmark running at http://localhost:${PORT}`);
+    if (!getMailer()) console.log('Email not configured yet: requests are saved but not sent (see .env.example).');
+  });
+}).catch((e) => {
+  console.error('Could not start storage:', e);
+  process.exit(1);
 });

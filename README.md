@@ -106,12 +106,27 @@ http://localhost:3000/api/requests?key=YOUR_ADMIN_KEY
 Everything is one JSON file at `data/db.json`: users, device sessions, scores and
 game requests. Back it up by copying that file. Delete it to start fresh.
 
+## Where the data lives
+
+Set `DATABASE_URL` and the site stores everything in Postgres. Leave it unset and
+it uses `data/db.json` instead, which is fine on your own machine.
+
+**Set it in production.** Free hosting almost never gives you a disk that survives
+a deploy, so without a database every account, password and leaderboard place is
+wiped each time you push a change or the service goes to sleep.
+
+The first time it starts with `DATABASE_URL` set, anything already in
+`data/db.json` is copied into the database, so switching over keeps your players.
+Running it again does not duplicate anyone.
+
 ## Hosting it
 
-Any host that runs Node works. Two things to set:
+Any host that runs Node works. Three things to set:
 
+- `DATABASE_URL`, a Postgres connection string. [Neon](https://neon.tech) has a free
+  tier that does not expire.
 - `NODE_ENV=production`, so the device cookie is marked secure.
-- A persistent disk for `data/db.json`, or accounts disappear on each deploy.
+- Nothing else. The app creates its own tables on first run.
 
 Party rooms use server-sent events. If you put this behind a proxy, turn off response
 buffering for `/api/rooms/*/events` or live updates will stall.
@@ -122,6 +137,7 @@ The site is plain HTML, CSS and vanilla JavaScript. There is no build step.
 
 ```
 server.js              Express app: auth, scores, leaderboards, rooms, requests
+storage.js             Postgres or JSON file, behind one interface
 public/
   index.html           Home page, stats, request form
   games.html           All games, filterable
