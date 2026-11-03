@@ -356,6 +356,9 @@ app.get('/api/community', wrap(async (req, res) => {
   });
 }));
 
+// Which storage is live: "postgres" keeps accounts across deploys, "file" does not.
+app.get('/api/health', (req, res) => res.json({ ok: true, storage: store.kind }));
+
 // ---------- Request a game ----------
 let mailer = null;
 function getMailer() {
