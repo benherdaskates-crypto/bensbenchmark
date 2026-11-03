@@ -22,8 +22,8 @@
   .choices { display: flex; gap: 12px; justify-content: center; margin-top: 30px; flex-wrap: wrap; }
   .choices .btn { min-width: 132px; }
   .hearts { display: flex; gap: 7px; justify-content: center; align-items: center; margin-top: 18px; }
-  .heart { font-size: 1.05rem; transition: transform .3s var(--ease), filter .3s, opacity .3s; }
-  .heart.gone { filter: grayscale(1); opacity: .32; transform: scale(.8); }
+  .heart { color: var(--bad); display: inline-grid; place-items: center; transition: transform .3s var(--ease), opacity .3s; }
+  .heart.gone { color: var(--border-mid); opacity: .5; transform: scale(.78); }
   .flashmsg { font-weight: 700; font-size: .95rem; min-height: 22px; margin-top: 14px; }
 </style>
 </head>
@@ -40,6 +40,7 @@
 <script>
 (function () {
   var KEY = 'verbal';
+  var HEART_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A4 4 0 0 1 12 8a4 4 0 0 1 7 2.7C19 15.6 12 20 12 20Z"/></svg>';
   var LIVES = 3;
   var seen, pool, current, score, lives, over;
 
@@ -70,7 +71,7 @@
     document.getElementById('hearts').innerHTML =
       '<span class="muted" style="font-size:.8rem;margin-right:5px">Lives</span>' +
       Array.from({ length: LIVES }, function (_, i) {
-        return '<span class="heart' + (i >= lives ? ' gone' : '') + '">❤️</span>';
+        return '<span class="heart' + (i >= lives ? ' gone' : '') + '">' + HEART_SVG + '</span>';
       }).join('');
   }
 

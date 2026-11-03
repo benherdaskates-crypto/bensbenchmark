@@ -23,9 +23,9 @@
   @keyframes pop { 50% { transform: scale(1.09); } }
   .tile.flip { animation: flip .55s ease forwards; }
   @keyframes flip { 0% { transform: rotateX(0); } 45%,55% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
-  .tile.correct { background: var(--green); border-color: var(--green); color: #fff; }
-  .tile.present { background: var(--yellow); border-color: var(--yellow); color: #fff; }
-  .tile.absent { background: var(--grey); border-color: var(--grey); color: #fff; }
+  .tile.correct { background: var(--green); border-color: var(--green); color: var(--on-green); }
+  .tile.present { background: var(--yellow); border-color: var(--yellow); color: var(--on-yellow); }
+  .tile.absent { background: var(--grey); border-color: var(--grey); color: var(--on-grey); }
   .grow.shake { animation: shake .42s var(--ease-soft); }
   @keyframes shake { 20%,60% { transform: translateX(-7px); } 40%,80% { transform: translateX(7px); } }
   .tile.win { animation: jump .55s var(--ease); }

@@ -26,6 +26,15 @@
   }
   .board-head b { font-size: 1rem; letter-spacing: -.02em; }
   .board-head span { display: block; font-size: .76rem; color: var(--muted); }
+  .medal {
+    display: inline-grid; place-items: center;
+    width: 21px; height: 21px; border-radius: 50%;
+    font-size: .72rem; font-weight: 800;
+    background: var(--surface-2); color: var(--text-2);
+  }
+  .medal.m1 { background: var(--ink); color: var(--bg); }
+  .medal.m2 { background: var(--border-mid); color: var(--bg); }
+  .medal.m3 { background: var(--border); color: var(--text-2); }
   .boards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
 </style>
 </head>
@@ -51,7 +60,7 @@
 <script src="/js/app.js"></script>
 <script>
 (function () {
-  var MEDAL = ['🥇', '🥈', '🥉'];
+  var MEDAL = ['1', '2', '3'];
 
   async function load() {
     var box = document.getElementById('boards');
@@ -68,7 +77,7 @@
           (rows.length
             ? '<table class="lb-table"><tbody>' + rows.map(function (r, j) {
                 return '<tr' + (r.username === me ? ' class="me"' : '') + '>' +
-                  '<td class="rank">' + (MEDAL[j] ? '<span class="medal">' + MEDAL[j] + '</span>' : j + 1) + '</td>' +
+                  '<td class="rank">' + (j < 3 ? '<span class="medal m' + (j + 1) + '">' + (j + 1) + '</span>' : j + 1) + '</td>' +
                   '<td>' + r.username + '</td>' +
                   '<td class="score">' + g.fmt(r.score) + '</td></tr>';
               }).join('') + '</tbody></table>'

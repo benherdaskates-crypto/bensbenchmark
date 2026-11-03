@@ -39,9 +39,9 @@
   @keyframes vpop { 50% { transform: scale(1.08); } }
   .vs-tile.flip { animation: vflip .5s ease forwards; }
   @keyframes vflip { 0% { transform: rotateX(0); } 45%,55% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
-  .vs-tile.correct { background: var(--green); border-color: var(--green); color: #fff; }
-  .vs-tile.present { background: var(--yellow); border-color: var(--yellow); color: #fff; }
-  .vs-tile.absent { background: var(--grey); border-color: var(--grey); color: #fff; }
+  .vs-tile.correct { background: var(--green); border-color: var(--green); color: var(--on-green); }
+  .vs-tile.present { background: var(--yellow); border-color: var(--yellow); color: var(--on-yellow); }
+  .vs-tile.absent { background: var(--grey); border-color: var(--grey); color: var(--on-grey); }
   .vs-row.shake { animation: vshake .42s var(--ease-soft); }
   @keyframes vshake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
 
@@ -108,9 +108,9 @@
     text-transform: uppercase; color: #fff;
     background: var(--surface-2);
   }
-  .mini-cell.correct { background: var(--green); }
-  .mini-cell.present { background: var(--yellow); }
-  .mini-cell.absent { background: var(--grey); }
+  .mini-cell.correct { background: var(--green); color: var(--on-green); }
+  .mini-cell.present { background: var(--yellow); color: var(--on-yellow); }
+  .mini-cell.absent { background: var(--grey); color: var(--on-grey); }
   .answer-line { text-align: center; margin-top: 18px; font-size: .9rem; }
   .answer-line b { font-family: var(--font-display); font-size: 1.15rem; letter-spacing: .06em; }
 

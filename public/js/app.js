@@ -7,16 +7,28 @@
   const BB = (window.BB = {});
 
   /* ---------- Games ---------- */
+  /* Game icons. Stroke SVGs rather than emoji, which render differently
+     on every device and are not announced sensibly by screen readers. */
+  const ICON_WORDLE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="6" height="10" rx="1.4"/><rect x="9" y="7" width="6" height="10" rx="1.4" fill="currentColor" stroke="none"/><rect x="16" y="7" width="6" height="10" rx="1.4"/></svg>';
+  const ICON_CONNECTIONS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.6"/><rect x="13" y="3" width="8" height="8" rx="1.6" fill="currentColor" stroke="none"/><rect x="3" y="13" width="8" height="8" rx="1.6" fill="currentColor" stroke="none"/><rect x="13" y="13" width="8" height="8" rx="1.6"/></svg>';
+  const ICON_HANGMAN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18h4M10 18h4M16 18h4"/><path d="M6 11V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4"/><path d="M12 5V3"/></svg>';
+  const ICON_TYPING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.4"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01"/><path d="M9 16h6"/><path d="M10 13h4"/></svg>';
+  const ICON_REACTION = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2Z"/></svg>';
+  const ICON_AIM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.4"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>';
+  const ICON_NUMBER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.4"/><path d="M8 9v6M8 9l2-1.4"/><path d="M13.6 9.6a2 2 0 1 1 2.6 2.2L13.4 15h3.4"/></svg>';
+  const ICON_SEQUENCE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" stroke="none"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" stroke="none"/></svg>';
+  const ICON_VERBAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10.5 5 8.5 4.3 6 4.3c-1 0-1.8.1-2.5.3v13c.7-.2 1.5-.3 2.5-.3 2.5 0 4.5.7 6 2.2"/><path d="M12 6.5c1.5-1.5 3.5-2.2 6-2.2 1 0 1.8.1 2.5.3v13c-.7-.2-1.5-.3-2.5-.3-2.5 0-4.5.7-6 2.2"/><path d="M12 6.5v13"/></svg>';
+
   BB.GAMES = {
-    wordle:      { name: 'Wordle',          href: '/games/wordle',          glyph: '🟩', color: '#6aaa64', unit: 'streak', dir: 'high', fmt: v => v + '', tag: 'Word',   blurb: 'Guess the word in six tries.',        modes: { daily: true, infinite: true, lengths: [3, 4, 5, 6] }, versus: true },
-    connections: { name: 'Connections',     href: '/games/connections',     glyph: '🔗', color: '#5a7dd4', unit: 'wins',   dir: 'high', fmt: v => v + '', tag: 'Word',   blurb: 'Find the four groups of four.',       modes: { daily: true, infinite: true } },
-    hangman:     { name: 'Hangman',         href: '/games/hangman',         glyph: '🪢', color: '#c1662a', unit: 'streak', dir: 'high', fmt: v => v + '', tag: 'Word',   blurb: 'Guess it before the drawing is done.', modes: { daily: true, infinite: true } },
-    typing:      { name: 'Typing Speed',    href: '/games/typing',          glyph: '⌨️', color: '#2a7fb8', unit: 'wpm',    dir: 'high', fmt: v => v + ' wpm', tag: 'Speed',  blurb: 'How fast can you type?',          modes: { durations: [15, 30, 60] }, versus: true },
-    reaction:    { name: 'Reaction Time',   href: '/games/reaction',        glyph: '⚡', color: '#b8860b', unit: 'ms',     dir: 'low',  fmt: v => v + ' ms',  tag: 'Speed',  blurb: 'Click when the screen turns green.', versus: true },
-    aim:         { name: 'Aim Trainer',     href: '/games/aim',             glyph: '🎯', color: '#c0392b', unit: 'ms',     dir: 'low',  fmt: v => v + ' ms',  tag: 'Speed',  blurb: 'Hit thirty targets, fast.',        versus: true },
-    number:      { name: 'Number Memory',   href: '/games/number-memory',   glyph: '🔢', color: '#7a4bbd', unit: 'digits', dir: 'high', fmt: v => v + '', tag: 'Memory', blurb: 'The number grows every round.' },
-    sequence:    { name: 'Sequence Memory', href: '/games/sequence-memory', glyph: '🧩', color: '#118a8a', unit: 'level',  dir: 'high', fmt: v => v + '', tag: 'Memory', blurb: 'Repeat the flashing pattern.' },
-    verbal:      { name: 'Verbal Memory',   href: '/games/verbal-memory',   glyph: '📖', color: '#a8306f', unit: 'words',  dir: 'high', fmt: v => v + '', tag: 'Memory', blurb: 'Seen this word, or is it new?' },
+    wordle:      { name: 'Wordle',          href: '/games/wordle',          glyph: ICON_WORDLE, color: '#6aaa64', unit: 'streak', dir: 'high', fmt: v => v + '', tag: 'Word',   blurb: 'Guess the word in six tries.',        modes: { daily: true, infinite: true, lengths: [3, 4, 5, 6] }, versus: true },
+    connections: { name: 'Connections',     href: '/games/connections',     glyph: ICON_CONNECTIONS, color: '#5a7dd4', unit: 'wins',   dir: 'high', fmt: v => v + '', tag: 'Word',   blurb: 'Find the four groups of four.',       modes: { daily: true, infinite: true } },
+    hangman:     { name: 'Hangman',         href: '/games/hangman',         glyph: ICON_HANGMAN, color: '#c1662a', unit: 'streak', dir: 'high', fmt: v => v + '', tag: 'Word',   blurb: 'Guess it before the drawing is done.', modes: { daily: true, infinite: true } },
+    typing:      { name: 'Typing Speed',    href: '/games/typing',          glyph: ICON_TYPING, color: '#2a7fb8', unit: 'wpm',    dir: 'high', fmt: v => v + ' wpm', tag: 'Speed',  blurb: 'How fast can you type?',          modes: { durations: [15, 30, 60] }, versus: true },
+    reaction:    { name: 'Reaction Time',   href: '/games/reaction',        glyph: ICON_REACTION, color: '#b8860b', unit: 'ms',     dir: 'low',  fmt: v => v + ' ms',  tag: 'Speed',  blurb: 'Click when the screen turns green.', versus: true },
+    aim:         { name: 'Aim Trainer',     href: '/games/aim',             glyph: ICON_AIM, color: '#c0392b', unit: 'ms',     dir: 'low',  fmt: v => v + ' ms',  tag: 'Speed',  blurb: 'Hit thirty targets, fast.',        versus: true },
+    number:      { name: 'Number Memory',   href: '/games/number-memory',   glyph: ICON_NUMBER, color: '#7a4bbd', unit: 'digits', dir: 'high', fmt: v => v + '', tag: 'Memory', blurb: 'The number grows every round.' },
+    sequence:    { name: 'Sequence Memory', href: '/games/sequence-memory', glyph: ICON_SEQUENCE, color: '#118a8a', unit: 'level',  dir: 'high', fmt: v => v + '', tag: 'Memory', blurb: 'Repeat the flashing pattern.' },
+    verbal:      { name: 'Verbal Memory',   href: '/games/verbal-memory',   glyph: ICON_VERBAL, color: '#a8306f', unit: 'words',  dir: 'high', fmt: v => v + '', tag: 'Memory', blurb: 'Seen this word, or is it new?' },
   };
 
   /* ---------- Seeded randomness (so daily puzzles match for everyone) ---------- */
@@ -404,7 +416,7 @@
       const key = el.getAttribute('data-best');
       const best = BB.bestFor(key);
       el.innerHTML = (best === undefined || best === null) ? ''
-        : `<span class="best-chip"><span class="crown">👑</span>Best ${BB.GAMES[key].fmt(best)}</span>`;
+        : `<span class="best-chip"><span class="crown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5l3.6 2.7L12 4l5.4 6.2L21 7.5 19.3 18H4.7L3 7.5Z"/></svg></span>Best ${BB.GAMES[key].fmt(best)}</span>`;
     });
   };
 
