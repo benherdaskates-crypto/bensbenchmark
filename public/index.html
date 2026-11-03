@@ -1,59 +1,61 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-motion="on">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BensBenchmark</title>
-<meta name="description" content="Wordle, Connections, Hangman and speed tests. Daily puzzles and endless ones.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23121212'/><text y='66' x='50' text-anchor='middle' font-size='46' font-family='Helvetica,sans-serif' font-weight='bold' fill='white'>BB</text></svg>">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08080a">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta property="og:site_name" content="BensBenchmark">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://www.bensbenchmark.top/assets/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
+<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='on'||m==='off'?m:(matchMedia('(prefers-reduced-motion: reduce)').matches?'calm':'on'))}catch(e){}</script>
+<title>BensBenchmark: daily puzzles and games to play with friends</title>
+<meta name="description" content="Brillion, Wordle, Pricedle, Daily Greens and more. Daily puzzles, endless modes and party codes to race your friends.">
+<link rel="canonical" href="https://www.bensbenchmark.top/">
+<meta property="og:title" content="BensBenchmark">
+<meta property="og:description" content="Daily puzzles, endless games and party codes to race your friends.">
+<meta property="og:url" content="https://www.bensbenchmark.top/">
 </head>
 <body>
 <main>
 
-  <section class="hero">
+  <section class="hero" id="top">
+    <canvas class="hero-canvas" id="hero-canvas" aria-hidden="true"></canvas>
     <div class="wrap">
-      <div class="top-stats reveal">
-        <span>Total users <b data-stat="users">—</b></span>
-        <span class="sep-dot"></span>
-        <span><span class="dot-live"></span>Online now <b data-stat="onlineNow">—</b></span>
-      </div>
-      <h1 class="reveal" style="--d:70ms">A puzzle a day.<br>Or a hundred.</h1>
-      <p class="hero-sub reveal" style="--d:140ms">
-        Wordle, Connections and Hangman, plus speed and memory tests. Play the daily one, then keep going.
-      </p>
-      <div class="hero-cta reveal" style="--d:210ms">
-        <a class="btn btn-lg" href="/games/wordle?mode=daily&len=5"><span>Today's Wordle</span></a>
+      <div class="hero-logo"><img class="lm-dark" src="/assets/logo-white.png" alt="BensBenchmark" width="230" height="160"><img class="lm-light" src="/assets/logo-black.png" alt="" width="230" height="160"></div>
+      <h1 class="reveal" style="--d:120ms">A puzzle a day.<br><span class="shine">Or a hundred.</span></h1>
+      <p class="hero-sub reveal" style="--d:200ms">Twelve games, ranked by what everyone is playing. Daily puzzles, endless modes, and codes to race your friends.</p>
+      <div class="hero-cta reveal" style="--d:280ms">
+        <a class="btn btn-lg" id="cta-top" href="/g/brillion"><span>Play the top game</span><span id="cta-arrow"></span></a>
         <a class="btn btn-ghost btn-lg" href="/play"><span>Play a friend</span></a>
       </div>
-      <button class="scroll-cue reveal" id="cue-games" style="--d:280ms">
-        <span>The games</span>
-        <span id="cue-icon"></span>
-      </button>
+      <div class="live-strip reveal" style="--d:360ms">
+        <span class="live-pill"><span class="dot-live"></span><b data-live="onlineNow">0</b> online now</span>
+        <span class="live-pill"><b data-live="users">0</b> accounts</span>
+        <span class="live-pill"><b data-live="gamesPlayed">0</b> rounds scored</span>
+      </div>
+      <button class="scroll-cue reveal" id="cue" style="--d:440ms" aria-label="Scroll to the games"><span>Games</span><span id="cue-icon"></span></button>
     </div>
   </section>
 
-  <section class="section" id="games">
+  <section class="section" id="games" style="padding-top:20px">
     <div class="wrap">
       <div class="section-head reveal">
         <div>
-          <h2>Daily Puzzles</h2>
-          <p>One of each, the same for everyone, every day.</p>
-        </div>
-        <a class="btn btn-ghost btn-sm" href="/leaderboards"><span>Leaderboards</span></a>
-      </div>
-      <div class="card-grid" id="grid-daily"></div>
-
-      <div class="section-head reveal mt-4">
-        <div>
-          <h2>Endless</h2>
-          <p>Finished the daily? These never run out.</p>
+          <div class="kicker">Ranked by plays</div>
+          <h2>Games</h2>
+          <p>Most played first. Pick one to see how it works and choose daily, endless or friends.</p>
         </div>
       </div>
-      <div class="card-grid" id="grid-endless"></div>
+      <div class="game-grid" id="grid"></div>
     </div>
   </section>
 
@@ -61,55 +63,42 @@
     <div class="wrap">
       <div class="section-head reveal">
         <div>
-          <div class="kicker">Benchmarks</div>
-          <h2>Put a number on it</h2>
-          <p>Reaction, aim, typing and three kinds of memory.</p>
-        </div>
-      </div>
-      <div class="card-grid" id="grid-bench"></div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <div>
           <div class="kicker">Party codes</div>
-          <h2>Race someone</h2>
-          <p>Make a code, send it to a friend, play the same puzzle at the same time.</p>
+          <h2>Race your friends</h2>
+          <p>Same puzzle, same moment, live progress bars. Nobody needs an account.</p>
         </div>
-        <a class="btn btn-sm" href="/play"><span>Start a game</span></a>
+        <a class="btn" href="/play"><span>Start a room</span></a>
       </div>
       <div class="steps" data-stagger="90">
-        <div class="step reveal"><div class="step-n">1</div><h3>Make a room</h3><p>You get a four-letter code.</p></div>
-        <div class="step reveal"><div class="step-n">2</div><h3>Send the code</h3><p>They type it in. No account needed.</p></div>
-        <div class="step reveal"><div class="step-n">3</div><h3>Go</h3><p>Same puzzle, live scores, one winner.</p></div>
+        <div class="step reveal"><div class="step-n">1</div><h3>Make a room</h3><p>Pick a game and get a four-letter code.</p></div>
+        <div class="step reveal"><div class="step-n">2</div><h3>Share the code</h3><p>Friends type it in on their own device.</p></div>
+        <div class="step reveal"><div class="step-n">3</div><h3>Race</h3><p>Everyone plays the same puzzle. Fastest or best wins.</p></div>
       </div>
     </div>
   </section>
 
-  <section class="section section-tint" id="request">
+  <section class="section" id="request">
     <div class="wrap">
       <div class="section-head reveal">
         <div>
           <div class="kicker">Requests</div>
           <h2>Want another game?</h2>
-          <p>Say which one and it comes straight to me.</p>
+          <p>Tell me which one and it goes straight to my inbox.</p>
         </div>
       </div>
-      <div class="card reveal reveal-scale" style="max-width:560px">
+      <div class="card reveal reveal-scale" style="max-width:580px">
         <form id="request-form">
-          <div id="request-msg"></div>
+          <div id="request-msg" role="status"></div>
           <div class="field" id="name-field">
             <label for="rq-name">Your name</label>
             <input class="input" id="rq-name" maxlength="40" placeholder="Optional" autocomplete="nickname">
           </div>
           <div class="field">
             <label for="rq-message">Which game?</label>
-            <textarea class="input" id="rq-message" maxlength="1000" required placeholder="Minesweeper, 2048, Sudoku…"></textarea>
+            <textarea class="input" id="rq-message" maxlength="1000" required placeholder="Minesweeper, 2048, Sudoku..."></textarea>
             <div class="hint"><span id="rq-count">0</span>/1000</div>
           </div>
-          <button class="btn btn-block" type="submit" id="rq-submit"><span>Send</span></button>
+          <button class="btn btn-block" type="submit" id="rq-submit"><span>Send request</span></button>
         </form>
       </div>
     </div>
@@ -118,55 +107,50 @@
 </main>
 
 <script src="/js/app.js"></script>
+<script src="/js/previews.js"></script>
+<script src="/js/hero.js"></script>
 <script>
 (function () {
+  BB.heroField(document.getElementById('hero-canvas'));
   document.getElementById('cue-icon').innerHTML = BB.ICON.down;
-
-  var DAILY = [
-    { key: 'wordle', href: '/games/wordle?mode=daily&len=5' },
-    { key: 'connections', href: '/games/connections?mode=daily' },
-    { key: 'hangman', href: '/games/hangman?mode=daily' }
-  ];
-  var ENDLESS = [
-    { key: 'wordle', title: 'Unlimited Wordle', href: '/games/wordle?mode=infinite&len=5', blurb: 'A new word the moment you finish.' },
-    { key: 'connections', title: 'Unlimited Connections', href: '/games/connections?mode=infinite', blurb: 'Fresh groups every single time.' },
-    { key: 'hangman', title: 'Unlimited Hangman', href: '/games/hangman?mode=infinite', blurb: 'Keep guessing for as long as you like.' }
-  ];
-  var BENCH = ['typing', 'reaction', 'aim', 'number', 'sequence', 'verbal'];
-
-  document.getElementById('grid-daily').innerHTML =
-    DAILY.map(function (d, i) { return BB.gameCard(d.key, i, d); }).join('');
-  document.getElementById('grid-endless').innerHTML =
-    ENDLESS.map(function (d, i) { return BB.gameCard(d.key, i, d); }).join('');
-  document.getElementById('grid-bench').innerHTML =
-    BENCH.map(function (k, i) { return BB.gameCard(k, i); }).join('');
-  BB.wireCards();
-
-  document.getElementById('cue-games').addEventListener('click', function () {
-    document.getElementById('games').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('cta-arrow').innerHTML = BB.ICON.arrow;
+  document.getElementById('cue').addEventListener('click', function () {
+    document.getElementById('games').scrollIntoView({ behavior: 'smooth' });
   });
 
-  BB.init({ active: 'home', playerCount: true }).then(function (user) {
+  var grid = document.getElementById('grid');
+  function render(plays) {
+    var order = BB.rankedGames(plays);
+    grid.innerHTML = order.map(function (k, i) {
+      return BB.gameCard(k, i, { rank: i + 1, plays: plays[k] || 0 });
+    }).join('');
+    BB.mountPreviews(grid);
+    BB.wireGlow(grid);
+    BB.initReveal();
+    var top = BB.GAMES[order[0]];
+    var cta = document.getElementById('cta-top');
+    cta.href = '/g/' + order[0];
+    cta.firstChild.textContent = 'Play ' + top.name;
+  }
+  BB.withPopularity(render);
+
+  BB.init({ active: 'home' }).then(function (user) {
     if (user) document.getElementById('name-field').classList.add('hidden');
   });
-  BB.initReveal();
 
   var ta = document.getElementById('rq-message');
   ta.addEventListener('input', function () { document.getElementById('rq-count').textContent = ta.value.length; });
-
   document.getElementById('request-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     var box = document.getElementById('request-msg');
     var btn = document.getElementById('rq-submit');
     btn.disabled = true;
     try {
-      await BB.api('/api/request', {
-        method: 'POST',
-        body: JSON.stringify({ name: document.getElementById('rq-name').value, message: ta.value })
-      });
+      await BB.api('/api/request', { method: 'POST', body: JSON.stringify({ name: document.getElementById('rq-name').value, message: ta.value }) });
       box.innerHTML = '<div class="notice notice-good">Sent. Thanks.</div>';
       e.target.reset();
       document.getElementById('rq-count').textContent = '0';
+      BB.sfx.good();
     } catch (err) {
       box.innerHTML = '<div class="notice notice-bad">' + err.message + '</div>';
     }

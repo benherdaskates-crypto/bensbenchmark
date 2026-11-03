@@ -1,14 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-motion="on">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Play a friend — BensBenchmark</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23121212'/><text y='66' x='50' text-anchor='middle' font-size='46' font-family='Helvetica,sans-serif' font-weight='bold' fill='white'>BB</text></svg>">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08080a">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta property="og:site_name" content="BensBenchmark">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://www.bensbenchmark.top/assets/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
+<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='on'||m==='off'?m:(matchMedia('(prefers-reduced-motion: reduce)').matches?'calm':'on'))}catch(e){}</script>
+<title>Play a friend | BensBenchmark</title>
 <style>
   .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 720px) { .panes { grid-template-columns: 1fr; } }
@@ -131,6 +140,11 @@
 <script src="/js/data.js"></script>
 <script src="/js/words.js"></script>
 <script src="/js/versus.js"></script>
+<script src="/js/games/brillion-data.js"></script>
+<script src="/js/games/brillion.js"></script>
+<script src="/js/games/pricedle-data.js"></script>
+<script src="/js/games/pricedle.js"></script>
+<script src="/js/games/greens.js"></script>
 <script>
 (function () {
   var view = document.getElementById('view');
@@ -139,7 +153,7 @@
   var countdownTimer = null;
   var lastStatus = null;
 
-  var VERSUS = ['wordle', 'typing', 'aim', 'reaction'];
+  var VERSUS = ['brillion', 'wordle', 'pricedle', 'greens', 'typing', 'aim', 'reaction'];
   function gname(k) { return BB.GAMES[k].name; }
 
   /* ---------------- entry ---------------- */
@@ -412,6 +426,10 @@
         // friend games count towards your stats and the leaderboards, same as solo
         if (s.game === 'wordle') {
           BB.recordWordle(score < 99, { tries: score, len: s.options.len, mode: 'versus' })
+            .then(function (r) { if (r.res.newBest) BB.toast('Personal best'); });
+        } else if (s.game === 'pricedle') {
+          // a race scores guesses, but the leaderboard tracks the win streak
+          BB.recordStreak('pricedle', score < 7, { guesses: score, mode: 'versus' })
             .then(function (r) { if (r.res.newBest) BB.toast('Personal best'); });
         } else {
           BB.submitScore(s.game, score, { versus: true }).then(function (r) {

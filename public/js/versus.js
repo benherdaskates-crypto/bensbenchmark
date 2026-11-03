@@ -101,6 +101,9 @@
     typing: { dir: 'high', label: (s) => s + ' wpm' },
     aim: { dir: 'low', label: (s) => s + ' ms' },
     reaction: { dir: 'low', label: (s) => s + ' ms' },
+    brillion: { dir: 'high', label: (s) => s + ' pts' },
+    pricedle: { dir: 'low', label: (s) => (s >= 7 ? 'Missed it' : 'Got it in ' + s) },
+    greens: { dir: 'low', label: (s) => s + ' strokes' },
   };
   VS.rank = function (players, game) {
     const r = RANK[game] || RANK.typing;
@@ -453,4 +456,19 @@
     document.addEventListener('keydown', onKey);
     return () => { clearTimeout(timer); document.removeEventListener('keydown', onKey); };
   };
+
+  /* ---------- Module games: same code as solo play, shared seed ---------- */
+  function moduleGame(name) {
+    return function (root, opts, api) {
+      const mod = window.BBG && window.BBG[name];
+      if (!mod) { root.innerHTML = '<div class="empty">This game did not load.</div>'; return () => {}; }
+      return mod.mount(root, { seed: 'room-' + opts.seed, mode: 'versus' }, {
+        progress: (p) => api.progress(p),
+        finish: (score) => api.finish(score),
+      });
+    };
+  }
+  VS.GAMES.brillion = moduleGame('brillion');
+  VS.GAMES.pricedle = moduleGame('pricedle');
+  VS.GAMES.greens = moduleGame('greens');
 })();

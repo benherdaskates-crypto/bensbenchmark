@@ -63,11 +63,27 @@ const GAMES = {
   number:     { name: 'Number Memory',  dir: 'high', unit: 'digits', min: 0,  max: 100 },
   sequence:   { name: 'Sequence Memory',dir: 'high', unit: 'level',  min: 0,  max: 100 },
   verbal:     { name: 'Verbal Memory',  dir: 'high', unit: 'words',  min: 0,  max: 1000 },
+  brillion:   { name: 'Brillion',       dir: 'high', unit: 'points', min: 0,  max: 700 },
+  pricedle:   { name: 'Pricedle',       dir: 'high', unit: 'streak', min: 0,  max: 5000 },
+  greens:     { name: 'Daily Greens',   dir: 'low',  unit: 'strokes', min: 9, max: 120 },
 };
+
+// ---------- Domain ----------
+// The site lives at www.bensbenchmark.top. Render already redirects the bare
+// domain, this is a backstop so links always settle on one address.
+const SITE_URL = (process.env.SITE_URL || 'https://www.bensbenchmark.top').replace(/\/$/, '');
+const SITE_HOST = new URL(SITE_URL).host;
+const BARE_HOST = SITE_HOST.replace(/^www\./, '');
 
 // ---------- App ----------
 const app = express();
 app.set('trust proxy', 1);
+app.use((req, res, next) => {
+  if (req.hostname === BARE_HOST && BARE_HOST !== SITE_HOST) {
+    return res.redirect(301, SITE_URL + req.originalUrl);
+  }
+  next();
+});
 // gzip everything except the room event stream, which must not be buffered
 app.use(compression({ filter: (req, res) => !req.path.endsWith('/events') && compression.filter(req, res) }));
 app.use(express.json({ limit: '50kb' }));
@@ -146,7 +162,10 @@ function limit(key, max, windowMs) {
 // ---------- Auth ----------
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,16}$/;
 
+const stripAt = (u) => String(u || '').trim().replace(/^@+/, '');
+
 app.post('/api/register', wrap(async (req, res) => {
+  if (req.body && typeof req.body.username === 'string') req.body.username = stripAt(req.body.username);
   // A whole class shares one school IP, so this is deliberately roomy.
   if (!limit('reg:' + req.ip, 60, 10 * 60e3)) return res.status(429).json({ error: 'Too many new accounts from here, wait a few minutes' });
   const { username = '', password = '' } = req.body || {};
@@ -172,6 +191,7 @@ app.post('/api/register', wrap(async (req, res) => {
 }));
 
 app.post('/api/login', wrap(async (req, res) => {
+  if (req.body && typeof req.body.username === 'string') req.body.username = stripAt(req.body.username);
   const { username = '', password = '' } = req.body || {};
   // Guessing is capped per account, which is the thing worth protecting.
   // The per-IP cap stays loose so a shared school connection still works.
@@ -289,6 +309,36 @@ app.get('/api/daily-stats/:key', wrap(async (req, res) => {
   res.json({ stats: row, total: row.t.reduce((a, b) => a + b, 0) + row.fail });
 }));
 
+// ---------- Popularity ----------
+// Counted when someone opens a game, so the home page can rank by what is played.
+app.post('/api/played', wrap(async (req, res) => {
+  const game = req.body && req.body.game;
+  if (!GAMES[game]) return res.status(400).json({ error: 'Unknown game' });
+  if (!limit('play:' + req.ip + ':' + game, 30, 10 * 60e3)) return res.json({ ok: true });
+  await store.plays.bump(game);
+  res.json({ ok: true });
+}));
+
+app.get('/api/popularity', wrap(async (req, res) => {
+  res.json({ plays: await store.plays.all() });
+}));
+
+// ---------- Presence ----------
+// Every open tab pings once a minute with a random id, signed in or not, so
+// "online now" counts real visitors rather than only account holders.
+const presence = new Map();
+const PRESENCE_MS = 2.5 * 60e3;
+function onlineCount() {
+  const now = Date.now();
+  for (const [id, t] of presence) if (now - t > PRESENCE_MS) presence.delete(id);
+  return presence.size;
+}
+app.post('/api/ping', (req, res) => {
+  const id = String((req.body && req.body.id) || '').slice(0, 40);
+  if (/^[a-z0-9]{8,40}$/i.test(id)) presence.set(id, Date.now());
+  res.json({ online: onlineCount() });
+});
+
 // ---------- Community stats (for the home page footer) ----------
 app.get('/api/community', wrap(async (req, res) => {
   const now = Date.now();
@@ -301,7 +351,7 @@ app.get('/api/community', wrap(async (req, res) => {
   res.json({
     users: counts.total,
     activeToday: counts.activeToday,
-    onlineNow: counts.onlineNow + inRooms.size,
+    onlineNow: Math.max(onlineCount(), counts.onlineNow + inRooms.size),
     gamesPlayed: counts.gamesPlayed,
   });
 }));
@@ -349,7 +399,7 @@ app.get('/api/requests', wrap(async (req, res) => {
 
 // ---------- Party rooms (in memory, live only while people are playing) ----------
 const rooms = new Map();
-const VERSUS_GAMES = ['wordle', 'typing', 'aim', 'reaction'];
+const VERSUS_GAMES = ['wordle', 'typing', 'aim', 'reaction', 'brillion', 'pricedle', 'greens'];
 const ROOM_IDLE_MS = 2 * 60 * 60e3;
 const PLAYER_IDLE_MS = 60e3;
 
@@ -568,8 +618,34 @@ const PUB = path.join(__dirname, 'public');
 
 app.get('/play', (req, res) => res.sendFile(path.join(PUB, 'play.html')));
 
-// "/games" must serve games.html, not the games/ directory listing.
-app.get('/games', (req, res) => res.sendFile(path.join(PUB, 'games.html')));
+// One landing page per game: /g/wordle, /g/brillion, ...
+let gameTpl = null;
+app.get('/g/:key', (req, res, next) => {
+  const g = GAMES[req.params.key];
+  if (!g) return next();
+  // Fill the title and description in on the server, so shared links preview properly.
+  if (!gameTpl || process.env.NODE_ENV !== 'production') gameTpl = fs.readFileSync(path.join(PUB, 'game.html'), 'utf8');
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  res.type('html').send(gameTpl
+    .replace(/{{TITLE}}/g, esc(g.name + ' | BensBenchmark'))
+    .replace(/{{DESC}}/g, esc(`Play ${g.name} on BensBenchmark: daily puzzles, endless mode and party codes to race your friends.`))
+    .replace(/{{URL}}/g, esc(SITE_URL + '/g/' + req.params.key)));
+});
+
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ${SITE_URL}/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  const paths = ['/', '/leaderboards', '/play']
+    .concat(Object.keys(GAMES).map((k) => '/g/' + k));
+  res.type('application/xml').send(
+    '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    paths.map((p) => `  <url><loc>${SITE_URL}${p}</loc></url>`).join('\n') + '\n</urlset>\n');
+});
+
+// The games live on the home page now, ranked by plays.
+app.get('/games', (req, res) => res.redirect(301, '/#games'));
 
 app.use(express.static(PUB, { extensions: ['html'], redirect: false }));
 app.use((req, res) => res.status(404).sendFile(path.join(PUB, '404.html')));
@@ -584,7 +660,7 @@ app.use((err, req, res, next) => {
 storage.open().then((opened) => {
   store = opened;
   app.listen(PORT, () => {
-    console.log(`BensBenchmark running at http://localhost:${PORT}`);
+    console.log(`BensBenchmark running at http://localhost:${PORT}  (public address ${SITE_URL})`);
     if (!getMailer()) console.log('Email not configured yet: requests are saved but not sent (see .env.example).');
   });
 }).catch((e) => {

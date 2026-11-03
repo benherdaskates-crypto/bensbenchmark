@@ -20,11 +20,16 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const HISTORY_CAP = 40; // rounds kept per game, per player
 
+/* Raise this to wipe every account, session, score and play count once,
+   on the next start. Game requests are kept. Matches DATA_VERSION in
+   public/js/app.js, which does the same for what browsers have saved. */
+const DATA_EPOCH = 2;
+
 /* ---------------------------------------------------------------- */
 /* JSON file backend                                                 */
 /* ---------------------------------------------------------------- */
 function jsonBackend() {
-  let db = { users: [], sessions: [], requests: [], dailyStats: {} };
+  let db = { users: [], sessions: [], requests: [], dailyStats: {}, plays: {} };
   let timer = null;
 
   function load() {
@@ -37,6 +42,12 @@ function jsonBackend() {
       }
     }
     db.dailyStats = db.dailyStats || {};
+    db.plays = db.plays || {};
+    if ((db.epoch || 1) < DATA_EPOCH) {
+      Object.assign(db, { users: [], sessions: [], dailyStats: {}, plays: {}, epoch: DATA_EPOCH });
+      console.log(`Data epoch ${DATA_EPOCH}: accounts and scores cleared for a fresh start.`);
+      save();
+    }
   }
 
   function save() {
@@ -99,6 +110,11 @@ function jsonBackend() {
     requests: {
       async add(r) { db.requests.push(r); save(); return r; },
       async all() { return db.requests; },
+    },
+
+    plays: {
+      async bump(game) { db.plays[game] = (db.plays[game] || 0) + 1; save(); },
+      async all() { return { ...db.plays }; },
     },
 
     daily: {
@@ -186,13 +202,44 @@ function pgBackend(url) {
           message   TEXT,
           at        BIGINT
         );
+        CREATE TABLE IF NOT EXISTS plays (
+          game  TEXT PRIMARY KEY,
+          count INTEGER NOT NULL DEFAULT 0
+        );
         CREATE TABLE IF NOT EXISTS daily_stats (
           key   TEXT PRIMARY KEY,
           tries JSONB NOT NULL DEFAULT '[0,0,0,0,0,0]'::jsonb,
           fail  INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS meta (
+          key   TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
       `);
+      if (await this.applyEpoch()) return;
       await this.importFromFile();
+    },
+
+    /* Wipe players once when DATA_EPOCH goes up. True if it did. */
+    async applyEpoch() {
+      const { rows } = await pool.query("SELECT value FROM meta WHERE key = 'epoch'");
+      if (rows[0] && Number(rows[0].value) >= DATA_EPOCH) return false;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const t of ['sessions', 'users', 'plays', 'daily_stats']) await client.query(`DELETE FROM ${t}`);
+        await client.query(
+          `INSERT INTO meta (key, value) VALUES ('epoch', $1)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [String(DATA_EPOCH)]);
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
+      console.log(`Data epoch ${DATA_EPOCH}: accounts and scores cleared for a fresh start.`);
+      return true;
     },
 
     /* Carry over anything already in data/db.json, once. */
@@ -203,6 +250,7 @@ function pgBackend(url) {
       let old;
       try { old = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch (e) { return; }
       if (!old.users || !old.users.length) return;
+      if ((old.epoch || 1) < DATA_EPOCH) return;       // from before the last reset
 
       for (const u of old.users) {
         const played = Object.values(u.history || {}).reduce((a, h) => a + h.length, 0);
@@ -317,6 +365,20 @@ function pgBackend(url) {
       async all() {
         const { rows } = await pool.query('SELECT * FROM requests ORDER BY at DESC LIMIT 500');
         return rows.map((r) => ({ id: r.id, from: r.from_name, message: r.message, at: Number(r.at) }));
+      },
+    },
+
+    plays: {
+      async bump(game) {
+        await pool.query(
+          `INSERT INTO plays (game, count) VALUES ($1, 1)
+           ON CONFLICT (game) DO UPDATE SET count = plays.count + 1`, [game]);
+      },
+      async all() {
+        const { rows } = await pool.query('SELECT game, count FROM plays');
+        const out = {};
+        for (const r of rows) out[r.game] = Number(r.count);
+        return out;
       },
     },
 
