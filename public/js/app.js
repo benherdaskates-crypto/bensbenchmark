@@ -375,7 +375,7 @@
     } else BB.applyTheme(next);
   };
 
-  /* ---------- Motion: on, calm (system asked for less), or off ---------- */
+  /* ---------- Motion: on unless the footer button turned it off ---------- */
   BB.motion = () => document.documentElement.getAttribute('data-motion') || 'on';
   BB.setMotion = function (v) {
     try { localStorage.setItem('bb_motion', v); } catch (e) {}
@@ -386,7 +386,7 @@
   function paintMotion() {
     const m = BB.motion();
     document.querySelectorAll('[data-motion-toggle]').forEach((b) => {
-      b.textContent = 'Animations: ' + (m === 'off' ? 'off' : m === 'calm' ? 'calm' : 'on');
+      b.textContent = 'Animations: ' + (m === 'off' ? 'off' : 'on');
       b.setAttribute('aria-pressed', String(m !== 'off'));
     });
   }

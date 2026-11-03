@@ -47,6 +47,22 @@
 .pd-line.empty .p { color:#cfcfc6; }
 .pd-total { display:flex; justify-content:space-between; font-weight:800; font-size:.86rem; }
 .pd-msg { min-height:22px; margin-top:10px; font-weight:600; font-size:.9rem; color: var(--text-2); }
+.pd-drop { display:inline-block; animation: pdDrop .9s var(--spring) both; }
+@keyframes pdDrop { from { transform: translateY(-70px) scale(.5) rotate(-20deg); opacity:0; } }
+.pd-heat { height:10px; border-radius:9px; background: var(--surface-3); margin:16px auto 0; max-width:260px; overflow:hidden; }
+.pd-heat i { display:block; height:100%; width:0; border-radius:9px; transition: width .9s var(--spring), background-color .6s; }
+.pd-heat-l { font-size:.72rem; color: var(--muted); margin-top:7px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; min-height:1em; }
+.pd-heat-l.pop { animation: pdHeat .5s var(--spring); }
+@keyframes pdHeat { from { transform: scale(1.5); } }
+.pd-stamp { position:absolute; left:50%; top:42%; transform: translate(-50%,-50%) rotate(-14deg); pointer-events:none; z-index:2;
+  border:4px solid #1d8a45; color:#1d8a45; background: rgba(255,255,255,.88); font: 900 2.5rem/1 var(--font-display);
+  padding:8px 20px; border-radius:12px; letter-spacing:.12em; animation: pdStamp .5s cubic-bezier(.3,1.6,.5,1) both; }
+.pd-stamp.lose { border-color:#c0392b; color:#c0392b; }
+@keyframes pdStamp { from { transform: translate(-50%,-50%) rotate(-14deg) scale(2.8); opacity:0; } }
+.pd-prod.out .pd-art { animation: none; filter: grayscale(.8) drop-shadow(0 6px 10px rgba(0,0,0,.3)); transform: translateY(10px) rotate(12deg); transition: all .8s var(--ease); }
+.pd-line .h { display:inline-block; }
+.pd-line.new .h { animation: pdTag .55s var(--spring) .25s both; }
+@keyframes pdTag { from { transform: scale(0) rotate(-12deg); } }
 `;
   function css() {
     if (document.getElementById('pd-css')) return;
@@ -76,11 +92,13 @@
       root.innerHTML = `
         <div class="pd">
           <div class="pd-prod">
-            <div class="pd-art">${art}</div>
+            <div class="pd-drop"><div class="pd-art" id="pd-art">${art}</div></div>
             <div class="pd-name">${name}</div>
             <div class="pd-size">${size}</div>
             <div class="pd-aisle"><span class="tag">${aisle}</span></div>
             <div class="pd-answer" id="pd-ans" aria-live="polite">$ ? ? . ? ?</div>
+            <div class="pd-heat" aria-hidden="true"><i id="pd-heat"></i></div>
+            <div class="pd-heat-l" id="pd-heat-l">Make a guess</div>
           </div>
           <div>
             <div class="pd-rcpt">
@@ -116,6 +134,25 @@
         $('pd-left').textContent = MAX - guesses.length;
       }
 
+      const fx = BB.fx || {};
+      // How warm the last guess was, from freezing to spot on.
+      function heat(diff) {
+        const warm = Math.max(0, 1 - Math.min(diff, 1));
+        const bar = $('pd-heat'), label = $('pd-heat-l');
+        bar.style.width = Math.max(6, warm * 100) + '%';
+        bar.style.backgroundColor = `hsl(${Math.round(215 - warm * 215)}, 75%, 55%)`;
+        label.textContent = diff <= 0.05 ? 'Spot on' : diff <= 0.1 ? 'Burning' : diff <= 0.25 ? 'Hot' : diff <= 0.5 ? 'Warm' : diff <= 1 ? 'Cold' : 'Freezing';
+        label.style.color = bar.style.backgroundColor;
+        label.classList.remove('pop'); void label.offsetWidth; label.classList.add('pop');
+      }
+      function stamp(won) {
+        const s = document.createElement('div');
+        s.className = 'pd-stamp' + (won ? '' : ' lose');
+        s.textContent = won ? 'SOLD' : 'OUT';
+        root.querySelector('.pd-prod').appendChild(s);
+        if (fx.shake) setTimeout(() => fx.shake(root.querySelector('.pd-prod'), 5), 380);
+      }
+
       function reveal(won) {
         const el = $('pd-ans');
         el.classList.add(won ? 'win' : 'lose');
@@ -137,6 +174,15 @@
         else { cls = 'down'; label = 'Lower ↓'; }
         guesses.push({ v, cls, label });
         paint(true);
+        heat(diff);
+        const art = $('pd-art');
+        if (cls === 'win') {
+          if (fx.burst) { fx.burst(art, { colors: ['#ffd23f', '#f5b301', '#6aaa64', '#ffffff'], count: 34, speed: 8, shape: 'star', size: 9 }); fx.ring(art, '#6aaa64', { size: 220 }); }
+        } else if (art.animate && BB.motion() !== 'off') {
+          const dy = cls === 'up' || (cls === 'close' && v < price) ? -16 : 12;
+          art.animate([{ translate: '0 0' }, { translate: `0 ${dy}px` }, { translate: '0 0' }], { duration: 520, easing: 'cubic-bezier(.34,1.56,.64,1)' });
+          if (cls === 'close' && fx.ring) fx.ring(art, '#c9b458', { size: 160 });
+        }
         BB.sfx[cls === 'win' ? 'win' : cls === 'close' ? 'good' : 'tick']();
         if (hooks.progress) hooks.progress(Math.round((guesses.length / MAX) * 90));
 
@@ -145,6 +191,8 @@
           over = true;
           input.disabled = true; $('pd-go').disabled = true;
           reveal(won);
+          setTimeout(() => stamp(won), 700);
+          if (!won) root.querySelector('.pd-prod').classList.add('out');
           $('pd-msg').textContent = won
             ? 'Solved in ' + guesses.length + '. It was ' + money(price) + '.'
             : 'Out of guesses. It was ' + money(price) + '.';

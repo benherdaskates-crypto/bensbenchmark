@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
-<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='on'||m==='off'?m:(matchMedia('(prefers-reduced-motion: reduce)').matches?'calm':'on'))}catch(e){}</script>
+<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='off'?'off':'on')}catch(e){}</script>
 <title>Wordle | BensBenchmark</title>
 <style>
   .grid { display: grid; gap: 5px; width: min(330px, 84vw); margin: 0 auto; }
@@ -49,6 +49,7 @@
 </main>
 
 <script src="/js/app.js"></script>
+<script src="/js/fx.js"></script>
 <script src="/js/words.js"></script>
 <script src="/js/game-shell.js"></script>
 <script>
@@ -275,7 +276,10 @@
       var t = document.getElementById('t-' + row + '-' + i);
       setTimeout(function () {
         t.classList.add('flip');
-        setTimeout(function () { t.classList.add(m); BB.sfx.tick(); }, 250);
+        setTimeout(function () {
+          t.classList.add(m); BB.sfx.tick();
+          if (BB.fx && m === 'correct') BB.fx.burst(t, { colors: ['#6aaa64', '#9be58a', '#ffffff'], count: 8, speed: 3, size: 4 });
+        }, 250);
       }, i * 150);
       var ch = word[i];
       if (!keyState[ch] || rankOf[m] > rankOf[keyState[ch]]) keyState[ch] = m;
@@ -293,6 +297,7 @@
         for (var i = 0; i < LEN; i++) {
           (function (i) { setTimeout(function () { document.getElementById('t-' + lastRow + '-' + i).classList.add('win'); }, i * 85); })(i);
         }
+        if (BB.fx) BB.fx.ring(document.getElementById('row-' + lastRow), '#6aaa64', { size: 380 });
         BB.sfx.win();
         end(true, lastRow + 1);
       }, LEN * 150 + 340);

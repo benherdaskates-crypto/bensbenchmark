@@ -791,9 +791,8 @@ textarea.input { resize: vertical; min-height: 110px; }
 }
 
 /* ============================================================
-   Motion. "on" is everything. "calm" (the default when the system
-   asks for reduced motion) keeps the small game previews but drops
-   big movement. "off" freezes it all; previews hold a finished frame.
+   Motion. On for everyone by default, whatever the system setting.
+   "off" (the footer button) freezes it all; previews hold a finished frame.
    ============================================================ */
 :root[data-motion="off"] :not(.pv, .pv *),
 :root[data-motion="off"] :not(.pv, .pv *)::before,
@@ -803,13 +802,6 @@ textarea.input { resize: vertical; min-height: 110px; }
 }
 :root[data-motion="off"] { scroll-behavior: auto; }
 :root[data-motion="off"] .reveal { opacity: 1; transform: none; }
-:root[data-motion="calm"] .reveal { transform: none; }
-:root[data-motion="calm"] .gcard:hover, :root[data-motion="calm"] .step:hover,
-:root[data-motion="calm"] .btn:hover, :root[data-motion="calm"] .mode-btn:hover { transform: none; }
-:root[data-motion="calm"] .hero-logo { animation: none; }
-:root[data-motion="calm"] .hero h1 .shine { animation: none; }
-:root[data-motion="calm"] .scroll-cue svg, :root[data-motion="calm"] .dot-live::after { animation: none; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
 .motion-toggle { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: .82rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .motion-toggle:hover { color: var(--text); }

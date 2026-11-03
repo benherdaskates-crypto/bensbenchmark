@@ -59,10 +59,14 @@ Daily puzzles come from a seeded shuffle keyed to the day number (30 September 2
 | --- | --- |
 | `public/js/data.js` | 5-letter words, Connections categories, Hangman words, typing and verbal-memory lists |
 | `public/js/words.js` | 3, 4 and 6 letter word lists |
-| `public/js/games/brillion-data.js` | Brillion prompts and their answers, most common first |
+| `public/js/games/brillion-data.js` | 56 Brillion prompts and about 7,500 answers, most common first |
 | `public/js/games/pricedle-data.js` | Pricedle items, sizes and prices |
 
 Daily Greens draws its courses from the day's seed, so there is no list to maintain.
+
+Brillion forgives spelling. One-letter slips are fixed on the spot ("helicoptor"), bigger
+ones get a "Did you mean ...?" ("mikelangelo"), full names count ("Vincent van Gogh"),
+and after three letters it offers to finish the word (Tab or tap to accept).
 
 ## Party codes
 
@@ -84,9 +88,10 @@ open tab that has checked in during the last two and a half minutes (each tab pi
 
 ## Animations
 
-Cards, previews and the home page field all animate. If the computer asks for reduced
-motion, the site starts in a calmer mode with no large movement. The "Animations" button
-in the footer cycles through on, calm and off.
+Animations are on for everyone by default. Cards, previews and the home page field all
+move, and every game has its own effects from `public/js/fx.js`: confetti on wins and
+personal bests, particle bursts on correct answers, floating points, shockwave rings and
+shakes on mistakes. The "Animations" button in the footer turns all of it off.
 
 ## Accounts and devices
 
@@ -168,6 +173,7 @@ public/
   js/app.js            Header, footer, theme, motion, auth, game list, daily seeding
   js/previews.js       The animated preview for each game
   js/hero.js           Home page dash field
+  js/fx.js             Game effects: confetti, bursts, floating points, shakes
   js/game-shell.js     Shared game page helpers and the solo game runner
   js/versus.js         Room client and the head-to-head games
   js/games/            Brillion, Pricedle and Daily Greens, with their data

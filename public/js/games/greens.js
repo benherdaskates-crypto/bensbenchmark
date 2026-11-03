@@ -105,6 +105,12 @@
   background: rgba(8,10,12,.72); color:#fff; font-weight:700; font-size:.88rem; backdrop-filter: blur(8px);
   white-space:nowrap; pointer-events:none; transition: opacity .3s var(--ease); }
 .gr-banner:empty { opacity: 0 !important; }
+.gr-banner.in { animation: grBan .45s var(--spring); }
+@keyframes grBan { from { transform: translateX(-50%) translateY(-14px) scale(.85); opacity:0; } }
+.gr-card h3.great { background: linear-gradient(90deg, #ffd23f, #fff6c9, #ffd23f); background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; animation: grShine 1.6s linear infinite; }
+@keyframes grShine { to { background-position: -200% 0; } }
+.gr-sc td { animation: grPop .4s var(--spring) both; }
 .gr-card { position:absolute; inset:0; display:grid; place-items:center; background: rgba(6,10,8,.55); backdrop-filter: blur(4px);
   animation: grFade .35s var(--ease) both; }
 @keyframes grFade { from { opacity:0; } to { opacity:1; } }
@@ -184,7 +190,59 @@
         clubIdx = pick < 0 ? CLUBS.length - 1 : pick;
       }
       function aimAtPin() { aim = Math.atan2(h.cup.x - ball.x, h.cup.y - ball.y); }
-      function banner(t) { const b = $('gr-banner'); b.textContent = t; b.style.opacity = t ? 1 : 0; }
+      function banner(t) {
+        const b = $('gr-banner');
+        if (t && t !== b.textContent) { b.classList.remove('in'); void b.offsetWidth; b.classList.add('in'); }
+        b.textContent = t; b.style.opacity = t ? 1 : 0;
+      }
+
+      /* ----- effects, kept in course coordinates so they move with the camera ----- */
+      const bits = [], ripples = [], trail = [];
+      const calm = () => BB.motion() === 'off';
+      const PUFF = { grass: ['#9be58a', '#5fae52', '#c8f2b8'], sand: ['#f0dfa3', '#d9c27a', '#fff3c8'],
+        water: ['#d6efff', '#7cc0f2', '#ffffff'], cup: ['#ffd23f', '#ffffff', '#7dca6f', '#f2cf55'] };
+      function puff(at, kind) {
+        if (calm()) return;
+        const now = performance.now(), cols = PUFF[kind];
+        const n = kind === 'cup' ? 30 : kind === 'water' ? 24 : 12;
+        for (let i = 0; i < n; i++) {
+          const up = kind === 'water' || kind === 'cup' || kind === 'sand';
+          const a = up ? -Math.PI / 2 + (Math.random() - 0.5) * 2.4 : Math.random() * Math.PI * 2;
+          const sp = (kind === 'cup' ? 3.6 : kind === 'water' ? 3.1 : kind === 'sand' ? 2.4 : 1.5) * (0.45 + Math.random());
+          bits.push({ ox: at.x, oy: at.y, dx: 0, dy: 0, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: kind === 'grass' ? 0.04 : 0.16,
+            t0: now, life: 550 + Math.random() * 450, r: 1.4 + Math.random() * 2.4, c: cols[i % cols.length] });
+        }
+        if (kind === 'water' || kind === 'cup') {
+          const c = kind === 'water' ? 'rgba(255,255,255,' : 'rgba(255,215,80,';
+          ripples.push({ ox: at.x, oy: at.y, t0: now, c, max: 30 }, { ox: at.x, oy: at.y, t0: now + 180, c, max: 22 });
+        }
+      }
+      function drawFx(now) {
+        for (let i = trail.length - 1; i >= 0; i--) if (now - trail[i].t > 320) trail.splice(i, 1);
+        if (trail.length > 1) {
+          ctx.lineCap = 'round';
+          for (let i = 1; i < trail.length; i++) {
+            const a = trail[i - 1], b = trail[i], k = 1 - (now - b.t) / 320;
+            ctx.strokeStyle = `rgba(255,255,255,${0.5 * k})`; ctx.lineWidth = 3 * k + 0.5;
+            ctx.beginPath(); ctx.moveTo(SX(a.x), SY(a.y) - a.lift); ctx.lineTo(SX(b.x), SY(b.y) - b.lift); ctx.stroke();
+          }
+        }
+        for (let i = ripples.length - 1; i >= 0; i--) {
+          const r = ripples[i], t = (now - r.t0) / 900;
+          if (t > 1) { ripples.splice(i, 1); continue; }
+          if (t < 0) continue;
+          ctx.strokeStyle = r.c + (1 - t) * 0.9 + ')'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(SX(r.ox), SY(r.oy), r.max * t + 2, (r.max * t + 2) * 0.6, 0, 0, Math.PI * 2); ctx.stroke();
+        }
+        for (let i = bits.length - 1; i >= 0; i--) {
+          const b = bits[i], t = (now - b.t0) / b.life;
+          if (t > 1) { bits.splice(i, 1); continue; }
+          b.vy += b.g; b.vx *= 0.97; b.dx += b.vx; b.dy += b.vy;
+          ctx.globalAlpha = 1 - t; ctx.fillStyle = b.c;
+          ctx.beginPath(); ctx.arc(SX(b.ox) + b.dx, SY(b.oy) + b.dy, b.r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
 
       function hud() {
         const total = card.reduce((a, b) => a + b, 0);
@@ -299,7 +357,9 @@
           bx = anim.from.x + (anim.to.x - anim.from.x) * e;
           by = anim.from.y + (anim.to.y - anim.from.y) * e;
           lift = anim.arc ? Math.sin(Math.PI * p) * anim.arc : 0;
+          if (anim.arc && !calm()) trail.push({ x: bx, y: by, lift, t: now });
         }
+        drawFx(now);
         const r = Math.max(3, 1.1 * cam.s) * (1 + lift / 60);
         ctx.beginPath(); ctx.ellipse(SX(bx) + lift * 0.5, SY(by) + lift * 0.35, r, r * 0.7, 0, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fill();
@@ -374,6 +434,7 @@
           y: ball.y + Math.cos(aim) * carry - Math.sin(aim) * side + Math.cos(h.wind.ang) * drift,
         };
         prev = { x: ball.x, y: ball.y };
+        puff(ball, lie === 'bunker' ? 'sand' : 'grass');
         const flight = 650 + carry * 4;
         anim = { from: { ...ball }, to: land, t0: performance.now(), dur: flight, arc: Math.min(70, 12 + carry * 0.22),
                  ease: (t) => t, done: () => landed(land, carry) };
@@ -383,6 +444,7 @@
       function landed(land, carry) {
         const where = lieAt(h, land);
         if (where === 'water' || where === 'ob') return penalty(where, land);
+        puff(land, where === 'bunker' ? 'sand' : 'grass');
         const roll = carry * (ROLL[where] || 0) + (where === 'fairway' || where === 'tee' ? 3 : 0);
         const rest = { x: land.x + Math.sin(aim) * roll, y: land.y + Math.cos(aim) * roll };
         if (roll < 0.5) return settle(land);
@@ -397,6 +459,8 @@
 
       function penalty(kind, at) {
         ball = at;
+        if (kind === 'water') puff(at, 'water');
+        else if (BB.fx) BB.fx.shake($('gr-stage'), 6);
         BB.sfx[kind === 'water' ? 'splash' : 'bad']();
         strokes++;
         banner(kind === 'water' ? 'Splash. +1 penalty' : 'Out of bounds. +1 penalty');
@@ -454,12 +518,17 @@
         card.push(strokes);
         BB.sfx[strokes <= h.par ? 'cup' : 'pop']();
         const diff = strokes - h.par;
+        if (msg !== 'Picked up') puff(h.cup, 'cup');
+        if (BB.fx && diff <= -1 && msg !== 'Picked up') {
+          BB.fx.confetti({ colors: ['#ffd23f', '#7dca6f', '#ffffff', '#4c9a46'], count: diff <= -2 || strokes === 1 ? 220 : 110 });
+          if (strokes === 1) BB.fx.flash('#ffd23f', 0.35);
+        }
         banner('');
         hud();
         const last = hi === HOLES - 1;
         const overlay = document.createElement('div');
         overlay.className = 'gr-card';
-        overlay.innerHTML = `<div><h3>${msg || scoreName(diff, strokes)}</h3>
+        overlay.innerHTML = `<div><h3 class="${diff <= -1 && msg !== 'Picked up' ? 'great' : ''}">${msg || scoreName(diff, strokes)}</h3>
           <p>Hole ${h.n}: ${strokes} stroke${strokes === 1 ? '' : 's'}, par ${h.par}</p>
           <button class="btn" id="gr-next"><span>${last ? 'See your card' : 'Next hole'}</span></button></div>`;
         $('gr-stage').appendChild(overlay);
@@ -482,8 +551,9 @@
         overlay.innerHTML = `<div style="width:min(92%,420px)"><h3>${total} · ${toPar(total - par)}</h3><p>Round complete, par ${par}</p>
           <table class="gr-sc"><tr><th>Hole</th>${course.map((c) => `<th>${c.n}</th>`).join('')}</tr>
           <tr><td>Par</td>${course.map((c) => `<td>${c.par}</td>`).join('')}</tr>
-          <tr><td>You</td>${card.map((s, i) => `<td class="${s < course[i].par ? 'u' : s > course[i].par ? 'o' : ''}">${s}</td>`).join('')}</tr></table></div>`;
+          <tr><td>You</td>${card.map((s, i) => `<td class="${s < course[i].par ? 'u' : s > course[i].par ? 'o' : ''}" style="animation-delay:${300 + i * 90}ms">${s}</td>`).join('')}</tr></table></div>`;
         $('gr-stage').appendChild(overlay);
+        if (BB.fx && total <= par) setTimeout(() => BB.fx.confetti({ colors: ['#ffd23f', '#7dca6f', '#ffffff', '#4c9a46'] }), 500);
         if (hooks.progress) hooks.progress(100);
         setTimeout(() => hooks.finish && hooks.finish(total, { card, par }), 700);
       }

@@ -32,36 +32,100 @@
     return s;
   }
   const key = (s) => singular(norm(s)).replace(/ /g, '');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  function near(a, b) {         // one edit apart, for longer words only
-    if (Math.abs(a.length - b.length) > 1 || Math.min(a.length, b.length) < 6) return false;
-    let i = 0, j = 0, edits = 0;
-    while (i < a.length && j < b.length) {
-      if (a[i] === b[j]) { i++; j++; continue; }
-      if (++edits > 1) return false;
-      if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  /* Edit distance with swaps counted as one edit, giving up past max. */
+  function dist(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    let prev2 = null, prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      let low = i;
+      for (let j = 1; j <= b.length; j++) {
+        let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (prev2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2] + 1);
+        cur.push(v);
+        if (v < low) low = v;
+      }
+      if (low > max) return max + 1;
+      prev2 = prev; prev = cur;
     }
-    return edits + (a.length - i) + (b.length - j) <= 1;
+    return prev[b.length];
   }
+  // Roughly how it sounds: vowels and doubled letters stripped, common swaps folded.
+  const sound = (k) => k.replace(/ph/g, 'f').replace(/ck|q/g, 'k').replace(/c(?=[eiy])/g, 's').replace(/c/g, 'k')
+    .replace(/z/g, 's').replace(/x/g, 'ks').replace(/(.)(?=\1)/g, '').replace(/(?!^)[aeiouyhw]/g, '');
+  const slack = (n) => (n <= 3 ? 0 : n <= 4 ? 1 : n <= 7 ? 2 : 3);
 
   const cache = {};
   function prompt(i) {
     if (cache[i]) return cache[i];
     const [q, list] = window.BRILLION_PROMPTS[i];
     const entries = list.split(',').map((x) => x.trim()).filter(Boolean);
+    const seen = new Set();
     const answers = entries.map((e, idx) => {
-      const forms = e.split('|').map((x) => x.trim());
+      const forms = e.split('|').map((x) => x.trim()).filter((f) => !seen.has(key(f)));
+      if (!forms.length) return null;
+      forms.forEach((f) => seen.add(key(f)));
       const frac = idx / entries.length;
       const tier = TIERS.find((t) => frac < t.upTo);
-      return { show: forms[0], keys: forms.map(key), tier };
-    });
+      const keys = forms.map(key);
+      return { show: forms[0], forms, keys, sounds: keys.map(sound), tier };
+    }).filter(Boolean);
     return (cache[i] = { q, answers });
   }
+
+  /* Shorter versions with words dropped off the front or back, so
+     "vincent van gogh" finds "van gogh" and "mount everest" finds "everest". */
+  function trims(words) {
+    const out = [];
+    if (words.length < 2 || words.length > 4) return out;
+    for (let len = words.length - 1; len >= 1; len--) {
+      for (const part of [words.slice(words.length - len), words.slice(0, len)]) {
+        const k = singular(part.join(' ')).replace(/ /g, '');
+        if (k.length >= 3 && out.indexOf(k) < 0) out.push(k);
+      }
+    }
+    return out;
+  }
+
+  /* { hit, how } where how is 'exact', 'fixed' (a small typo, taken as is)
+     or 'ask' (close enough to offer "did you mean"). */
   function match(p, text) {
     const k = key(text);
     if (!k) return null;
-    return p.answers.find((a) => a.keys.indexOf(k) > -1) ||
-           p.answers.find((a) => a.keys.some((x) => near(x, k))) || null;
+    const find = (x) => p.answers.find((a) => a.keys.indexOf(x) > -1);
+    const whole = find(k);
+    if (whole) return { hit: whole, how: 'exact' };
+    // Two answers in one go ("navy blue", "shark whale") count as the more
+    // common one, so listing several never beats naming one well.
+    const found = trims(norm(text).split(' ').filter(Boolean)).map(find).filter(Boolean);
+    if (found.length) return { hit: found.sort((a, b) => p.answers.indexOf(a) - p.answers.indexOf(b))[0], how: 'exact' };
+    let best = null, bestD = 99;
+    for (const a of p.answers) {
+      for (const x of a.keys) {
+        const d = dist(k, x, 3);
+        if (d < bestD) { best = a; bestD = d; }
+      }
+    }
+    if (best && bestD === 1 && k.length >= 5) return { hit: best, how: 'fixed' };
+    if (best && bestD <= slack(Math.min(k.length, 12))) return { hit: best, how: 'ask' };
+    if (k.length >= 4) {
+      const s = sound(k);
+      const a = p.answers.find((x) => x.sounds.indexOf(s) > -1);
+      if (a) return { hit: a, how: 'ask' };
+    }
+    return null;
+  }
+
+  /* The most common answer that begins with what they have typed so far. */
+  function complete(p, text) {
+    const v = text.replace(/^\s+/, '').toLowerCase();
+    if (v.length < 3) return null;
+    for (const a of p.answers)
+      for (const f of a.forms)
+        if (f.length > v.length && f.toLowerCase().startsWith(v)) return f;
+    return null;
   }
 
   const CSS = `
@@ -92,6 +156,37 @@
 .br-input::placeholder { color: rgba(220,235,255,.5); }
 .br-input:focus { border-color:#8fd0ff; box-shadow: 0 0 0 4px rgba(143,208,255,.18); }
 .br-input.shake { animation: pdShake .4s var(--ease-soft); }
+.br-field { position:relative; flex:1; display:flex; }
+.br-field .br-input { width:100%; position:relative; background: transparent; z-index:1; }
+.br-field::before { content:''; position:absolute; inset:0; border-radius:14px; background: rgba(0,0,0,.28); }
+.br-ghost { position:absolute; inset:0; padding: 12px 17px; border:1px solid transparent; font-size:1.1rem; font-weight:600;
+  white-space:pre; overflow:hidden; pointer-events:none; display:flex; align-items:center; color: rgba(220,235,255,.38); }
+.br-ghost span { color: transparent; }
+.br-fill, .br-ask button { font: inherit; cursor:pointer; border-radius:99px; }
+.br-fill { display:inline-flex; align-items:center; gap:8px; margin-top:10px; padding:6px 12px; font-size:.85rem; font-weight:700;
+  color:#dff1ff; background: rgba(143,208,255,.14); border:1px solid rgba(143,208,255,.35); animation: brPop .3s var(--spring) both; }
+.br-fill kbd { font: 700 .7rem/1 var(--font); padding:3px 6px; border-radius:6px; background: rgba(255,255,255,.16); }
+.br-ask { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; padding:12px 14px; border-radius:16px;
+  background: rgba(124,92,255,.18); border:1px solid rgba(160,140,255,.45); animation: brPop .4s var(--spring) both; }
+.br-ask p { margin:0; font-weight:600; }
+.br-ask b { color:#fff; font-size:1.08rem; }
+.br-ask button { padding:8px 16px; font-weight:800; border:1px solid rgba(255,255,255,.35); background:transparent; color:#dbe8ff; }
+.br-ask button.yes { background:#fff; color:#06182f; border-color:#fff; }
+.br-fixed { font-size:.85rem; color:#b9d2f5; }
+.br-q .w { display:inline-block; animation: brWord .55s var(--spring) both; }
+@keyframes brWord { from { opacity:0; transform: translateY(18px) rotate(4deg); filter: blur(4px); } to { opacity:1; transform:none; filter:none; } }
+.br-time.low { animation: brLow .6s ease-in-out infinite alternate; }
+@keyframes brLow { to { box-shadow: 0 0 14px rgba(255,107,107,.7); } }
+.br-tier { animation: brTier 1.4s var(--ease) both; background-size: 220% 100% !important; }
+@keyframes brTier { from { filter: brightness(2.2); } to { filter: none; } }
+.br-pts { display:inline-block; animation: brPts .6s var(--spring) .1s both; }
+@keyframes brPts { from { transform: scale(.3); opacity:0; } to { transform:none; opacity:1; } }
+.br-gauge.pulse { animation: brGauge .8s var(--ease); }
+@keyframes brGauge { 30% { box-shadow: 0 0 0 3px rgba(143,208,255,.5), 0 0 30px rgba(124,92,255,.6); } }
+.br-diver { position:absolute; left:50%; top:0; width:14px; height:14px; border-radius:50%; background:#fff;
+  box-shadow: 0 0 12px #8fd0ff, 0 0 0 4px rgba(255,255,255,.18); transform: translate(-50%, -50%); transition: top 1.1s var(--ease); z-index:2; }
+.br-fish { position:absolute; top:0; left:0; pointer-events:none; font-size:26px; opacity:.85; animation: brSwim linear forwards; }
+@keyframes brSwim { from { transform: translateX(-60px) scaleX(-1); } to { transform: translateX(calc(var(--w) + 60px)) scaleX(-1); } }
 @keyframes pdShake { 20%,60% { transform: translateX(-7px); } 40%,80% { transform: translateX(7px); } }
 .br .btn { background:#fff; color:#06182f; border-color:#fff; }
 .br .btn-ghost { background: transparent; color:#dbe8ff; border-color: rgba(255,255,255,.3); }
@@ -138,13 +233,17 @@
         `<i style="left:${(i * 8.3 + 3) % 100}%;animation-duration:${6 + (i % 5)}s;animation-delay:${-i * 0.7}s"></i>`).join('');
       root.innerHTML = `
         <div class="br">
-          <div class="br-light"></div><div class="br-sea">${bubbles}</div>
+          <div class="br-light"></div><div class="br-sea" id="br-sea">${bubbles}</div>
           <div class="br-in">
             <div id="br-main"></div>
-            <div class="br-gauge" title="Depth"><i id="br-depth"></i><b id="br-m">0 m</b></div>
+            <div class="br-gauge" id="br-gauge" title="Depth"><i id="br-depth"></i><span class="br-diver" id="br-diver"></span><b id="br-m">0 m</b></div>
           </div>
         </div>`;
       const main = root.querySelector('#br-main');
+      const fx = BB.fx || {};
+      const call = (name, ...a) => { if (fx[name]) fx[name](...a); };
+      const quietly = (fn) => { fx.quiet = true; try { fn(); } finally { fx.quiet = false; } };
+      let shownMetres = 0;
 
       function dots() {
         return '<div class="br-dots">' + picks.map((_, i) => {
@@ -153,25 +252,100 @@
         }).join('') + '</div>';
       }
       function depth() {
-        root.querySelector('#br-depth').style.height = Math.min(100, (total / (ROUNDS * 100)) * 100) + '%';
-        root.querySelector('#br-m').textContent = (total * 10).toLocaleString() + ' m';
+        const pct = Math.min(100, (total / (ROUNDS * 100)) * 100);
+        root.querySelector('#br-depth').style.height = pct + '%';
+        root.querySelector('#br-diver').style.top = Math.max(3, pct) + '%';
+        const m = root.querySelector('#br-m');
+        if (fx.count) fx.count(m, total * 10, { from: shownMetres, duration: 1100, format: (n) => Math.round(n).toLocaleString() + ' m' });
+        else m.textContent = (total * 10).toLocaleString() + ' m';
+        shownMetres = total * 10;
+      }
+      // Fish swim past on a deep answer.
+      function school(n) {
+        if (!BB.fx || BB.motion() === 'off') return;
+        const sea = root.querySelector('#br-sea'), w = sea.offsetWidth;
+        for (let i = 0; i < n; i++) {
+          const f = document.createElement('span');
+          f.className = 'br-fish';
+          f.textContent = ['🐟', '🐠', '🐡', '🦑', '🐙', '🪼'][Math.floor(Math.random() * 6)];
+          f.style.cssText = `--w:${w}px;top:${20 + Math.random() * 60}%;animation-duration:${2.4 + Math.random() * 2}s;animation-delay:${i * 0.18}s;font-size:${18 + Math.random() * 16}px`;
+          sea.appendChild(f);
+          setTimeout(() => f.remove(), 5200);
+        }
       }
 
       function ask() {
         const p = prompt(picks[round]);
         locked = false;
+        let pending = null, fill = null;
         main.innerHTML = `
           <div class="br-top">${dots()}<span>${round + 1} / ${ROUNDS}</span></div>
-          <div class="br-q">${p.q}</div>
+          <div class="br-q">${p.q.split(' ').map((w, i) => `<span class="w" style="animation-delay:${i * 70}ms">${w}</span>`).join(' ')}</div>
           <div class="br-time" id="br-time"><i id="br-bar"></i></div>
           <form class="br-form" id="br-form" autocomplete="off">
-            <input class="br-input" id="br-in" placeholder="Type an answer" aria-label="${p.q}" maxlength="40" spellcheck="false" autocapitalize="off">
+            <div class="br-field"><div class="br-ghost" id="br-ghost" aria-hidden="true"></div>
+              <input class="br-input" id="br-in" placeholder="Type an answer" aria-label="${p.q}" maxlength="40" spellcheck="false" autocapitalize="off" autocorrect="off"></div>
             <button class="btn" type="submit"><span>Go</span></button>
           </form>
+          <div id="br-help"></div>
           <div class="row mt-2"><button class="btn btn-ghost btn-sm" id="br-skip" type="button"><span>Skip</span></button></div>
           <div class="br-msg" id="br-msg" role="status"></div>`;
         const input = main.querySelector('#br-in');
-        main.querySelector('#br-form').addEventListener('submit', (e) => { e.preventDefault(); submit(input.value); });
+        const ghost = main.querySelector('#br-ghost');
+        const help = main.querySelector('#br-help');
+        const msg = main.querySelector('#br-msg');
+
+        function suggest() {
+          pending = null;
+          fill = complete(p, input.value);
+          ghost.innerHTML = fill ? `<span>${esc(input.value)}</span>${esc(fill.slice(input.value.replace(/^\s+/, '').length))}` : '';
+          help.innerHTML = fill ? `<button class="br-fill" type="button" id="br-fill">${esc(fill)} <kbd>Tab</kbd></button>` : '';
+          if (fill) help.querySelector('#br-fill').addEventListener('click', () => accept());
+        }
+        function accept() {
+          if (!fill) return;
+          input.value = fill;
+          fill = null; ghost.innerHTML = ''; help.innerHTML = '';
+          call('pop', input, 0.04);
+          BB.sfx.select();
+          input.focus();
+        }
+        function wrong(text) {
+          deadline -= PENALTY * 1000;
+          input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
+          input.select();
+          help.innerHTML = '';
+          msg.textContent = text + ' -' + PENALTY + 's';
+          call('flash', 'rgba(255,90,90,.6)', 0.18);
+          BB.sfx.bad();
+        }
+        function offer(m, typed) {
+          pending = { hit: m.hit, typed };
+          ghost.innerHTML = '';
+          help.innerHTML = `<div class="br-ask" role="alert"><p>Did you mean <b>${esc(m.hit.show)}</b>?</p>
+            <button type="button" class="yes" id="br-yes">Yes</button><button type="button" id="br-no">No</button></div>`;
+          help.querySelector('#br-yes').addEventListener('click', () => settle(pending.hit, pending.typed, false, true));
+          help.querySelector('#br-no').addEventListener('click', () => { pending = null; wrong('Not on our list.'); input.focus(); });
+          msg.textContent = 'Press Enter for yes, or keep typing.';
+          BB.sfx.select();
+        }
+
+        input.addEventListener('input', () => { msg.textContent = ''; suggest(); });
+        input.addEventListener('keydown', (e) => {
+          const end = input.selectionStart === input.value.length;
+          if (fill && (e.key === 'Tab' || (e.key === 'ArrowRight' && end))) { e.preventDefault(); accept(); }
+          else if (e.key === 'Escape') { fill = null; ghost.innerHTML = ''; help.innerHTML = ''; }
+        });
+        main.querySelector('#br-form').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const text = input.value;
+          if (locked || !text.trim()) return;
+          if (pending && pending.typed === text) return settle(pending.hit, text, false, true);
+          const m = match(p, text);
+          if (!m) return wrong('Not on our list.');
+          if (m.how === 'ask') return offer(m, text);
+          settle(m.hit, text, false, m.how === 'fixed');
+        });
         main.querySelector('#br-skip').addEventListener('click', () => settle(null, ''));
         setTimeout(() => input.focus(), 50);
         deadline = performance.now() + SECONDS * 1000;
@@ -188,20 +362,7 @@
         })();
       }
 
-      function submit(text) {
-        if (locked || !text.trim()) return;
-        const p = prompt(picks[round]);
-        const hit = match(p, text);
-        if (hit) return settle(hit, text);
-        deadline -= PENALTY * 1000;
-        const input = main.querySelector('#br-in');
-        input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
-        input.select();
-        main.querySelector('#br-msg').textContent = 'Not on our list. -' + PENALTY + 's';
-        BB.sfx.bad();
-      }
-
-      function settle(hit, text, timedOut) {
+      function settle(hit, text, timedOut, fixed) {
         if (locked) return;
         locked = true;
         cancelAnimationFrame(raf);
@@ -212,33 +373,50 @@
         depth();
         if (hooks.progress) hooks.progress(Math.round(((round + 1) / ROUNDS) * 100));
         // show off a rare answer they could have given
-        const rare = p.answers.filter((a) => a.tier.pts >= 85);
+        const rare = p.answers.filter((a) => a.tier.pts >= 85 && a !== hit);
         const example = rare.length ? rare[Math.floor(Math.random() * rare.length)].show : '';
         main.innerHTML = `
           <div class="br-top">${dots()}<span>${round + 1} / ${ROUNDS}</span></div>
           <div class="br-q" style="animation:none">${p.q}</div>
           ${hit
-            ? `<div class="br-hit"><span class="br-tier" style="background:${hit.tier.color}">${hit.tier.name}</span>
-                 <span class="br-pts">+${pts}</span><span class="br-ans">${hit.show}</span></div>`
+            ? `<div class="br-hit"><span class="br-tier" id="br-tier" style="background:${hit.tier.color}">${hit.tier.name}</span>
+                 <span class="br-pts" id="br-pts">+${pts}</span><span class="br-ans">${esc(hit.show)}</span>
+                 ${fixed ? '<span class="br-fixed">spelling fixed</span>' : ''}</div>`
             : `<div class="br-hit"><span class="br-tier" style="background:#55627a">${timedOut ? 'Time' : 'Skipped'}</span><span class="br-pts">+0</span></div>`}
-          <div class="br-msg">${example ? 'A deep cut: <b>' + example + '</b>' : ''}</div>`;
-        BB.sfx[hit ? (pts >= 85 ? 'win' : 'good') : 'lose']();
+          <div class="br-msg">${example ? 'A deep cut: <b>' + esc(example) + '</b>' : ''}</div>`;
+        quietly(() => BB.sfx[hit ? (pts >= 85 ? 'win' : 'good') : 'lose']());
+        if (hit) {
+          const tierEl = main.querySelector('#br-tier'), ptsEl = main.querySelector('#br-pts');
+          const gauge = root.querySelector('#br-gauge');
+          call('burst', tierEl, { colors: [hit.tier.color, '#ffffff', '#bfe6ff'], count: 12 + pts / 4, speed: 4 + pts / 25 });
+          call('bubbles', tierEl, { count: 6 + Math.round(pts / 8) });
+          call('float', ptsEl, '+' + pts, { color: hit.tier.color, size: 22 + pts / 6 });
+          call('ring', gauge.querySelector('#br-diver'), hit.tier.color, { size: 90 });
+          gauge.classList.remove('pulse'); void gauge.offsetWidth; gauge.classList.add('pulse');
+          if (pts >= 60) school(pts >= 100 ? 7 : pts >= 85 ? 4 : 2);
+          if (pts >= 85) call('flash', hit.tier.color, 0.28);
+          if (pts >= 100) call('confetti', { colors: [hit.tier.color, '#7c5cff', '#5bc0eb', '#ffffff'], count: 120 });
+        }
         timer = setTimeout(() => {
           if (!alive) return;
           round++;
           if (round < ROUNDS) ask(); else end();
-        }, hit ? 1700 : 2000);
+        }, hit ? 1900 : 2000);
       }
 
       function end() {
         main.innerHTML = `
           <div class="br-top">${dots()}<span>Dive complete</span></div>
-          <div class="br-big">${total} pts</div>
+          <div class="br-big" id="br-big">0 pts</div>
           <div class="br-msg">You reached ${(total * 10).toLocaleString()} metres.</div>
-          <div class="br-sum">${results.map((r, i) => `<div class="br-row" style="animation-delay:${i * 60}ms">
-            <span class="q">${r.q}</span><span class="a">${r.answer || '—'}</span>
+          <div class="br-sum">${results.map((r, i) => `<div class="br-row" style="animation-delay:${200 + i * 90}ms">
+            <span class="q">${r.q}</span><span class="a">${esc(r.answer) || '—'}</span>
             <span class="s" style="color:${r.tier ? r.tier.color : '#8aa'}">${r.pts}</span></div>`).join('')}</div>`;
-        setTimeout(() => hooks.finish && hooks.finish(total, { results }), 900);
+        const big = main.querySelector('#br-big');
+        if (fx.count) fx.count(big, total, { duration: 1400, format: (n) => Math.round(n) + ' pts' }); else big.textContent = total + ' pts';
+        school(total >= 400 ? 8 : 3);
+        if (total >= 350) setTimeout(() => call('confetti', { colors: ['#5bc0eb', '#7c5cff', '#e05bd0', '#2fb3a1', '#ffffff'] }), 600);
+        setTimeout(() => hooks.finish && hooks.finish(total, { results }), 1500);
       }
 
       depth();
@@ -253,6 +431,6 @@
         sub: 'You reached ' + (score * 10).toLocaleString() + ' metres.' + (score >= 500 ? ' That is deep.' : ''),
       };
     },
-    _test: { norm, key, near, prompt, match },
+    _test: { norm, key, dist, sound, prompt, match, complete },
   };
 })();

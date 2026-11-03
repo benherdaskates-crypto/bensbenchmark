@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
-<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='on'||m==='off'?m:(matchMedia('(prefers-reduced-motion: reduce)').matches?'calm':'on'))}catch(e){}</script>
+<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='off'?'off':'on')}catch(e){}</script>
 <title>Sequence Memory | BensBenchmark</title>
 <style>
   .pad-wrap {
@@ -134,6 +134,7 @@
 </main>
 
 <script src="/js/app.js"></script>
+<script src="/js/fx.js"></script>
 <script src="/js/game-shell.js"></script>
 <script>
 (function () {
@@ -180,6 +181,8 @@
       var c = cells[i];
       BB.sfx[cls === 'bad' ? 'bad' : cls === 'good' ? 'pop' : 'tick']();
       c.classList.add(cls || 'lit');
+      if (BB.fx && cls === 'good') BB.fx.burst(c, { count: 10, speed: 3.5, size: 4 });
+      if (BB.fx && cls === 'bad') BB.fx.shake(gridEl, 8);
       setTimeout(function () {
         c.classList.remove(cls || 'lit');
         setTimeout(res, 110);
@@ -189,6 +192,7 @@
 
   async function nextRound() {
     level++;
+    if (BB.fx && level > 1) BB.fx.float(gridEl, 'Level ' + level, { color: '#2fb3a1' });
     seq.push(Math.floor(Math.random() * 9));
     input = [];
     BB.setStat('st-level', level);

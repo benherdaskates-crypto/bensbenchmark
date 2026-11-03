@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
-<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='on'||m==='off'?m:(matchMedia('(prefers-reduced-motion: reduce)').matches?'calm':'on'))}catch(e){}</script>
+<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='off'?'off':'on')}catch(e){}</script>
 <title>Hangman | BensBenchmark</title>
 <style>
   .hg-top { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; justify-content: center; }
@@ -48,6 +48,7 @@
 </main>
 
 <script src="/js/app.js"></script>
+<script src="/js/fx.js"></script>
 <script src="/js/data.js"></script>
 <script src="/js/game-shell.js"></script>
 <script>
@@ -219,6 +220,10 @@
     var hitIt = word.indexOf(ch) > -1;
     if (btn) btn.classList.add(hitIt ? 'correct' : 'absent');
     if (hitIt) BB.sfx.pop(); else BB.sfx.bad();
+    if (BB.fx) {
+      if (hitIt && btn) BB.fx.burst(btn, { colors: ['#6aaa64', '#9be58a', '#ffffff'], count: 10, speed: 3.5, size: 4 });
+      else if (!hitIt) BB.fx.shake(document.querySelector('.gallows'), 7);
+    }
     if (!hitIt) {
       document.getElementById('p' + wrong).classList.add('show');
       wrong++;

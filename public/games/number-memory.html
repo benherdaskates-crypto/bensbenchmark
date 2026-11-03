@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
-<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='on'||m==='off'?m:(matchMedia('(prefers-reduced-motion: reduce)').matches?'calm':'on'))}catch(e){}</script>
+<script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='off'?'off':'on')}catch(e){}</script>
 <title>Number Memory | BensBenchmark</title>
 <style>
   .stage { min-height: 320px; display: grid; place-items: center; text-align: center; padding: 26px 10px; }
@@ -52,6 +52,7 @@
 </main>
 
 <script src="/js/app.js"></script>
+<script src="/js/fx.js"></script>
 <script src="/js/game-shell.js"></script>
 <script>
 (function () {
@@ -108,6 +109,7 @@
     if (given === number) {
       BB.sfx.good();
       level++;
+      if (BB.fx) { BB.fx.ring(stage, '#6aaa64', { size: 320 }); BB.fx.float(stage, 'Level ' + level, { color: '#6aaa64' }); }
       stage.innerHTML = '<div><div class="digits" style="color:var(--good)">Correct</div>' +
         '<p class="muted mt-2">' + level + ' digits next.</p></div>';
       setTimeout(show, 850);
@@ -115,6 +117,7 @@
     }
 
     BB.sfx.lose();
+    if (BB.fx) BB.fx.shake(stage, 9);
     var score = level - 1;
     var compare = number.split('').map(function (d, i) {
       return '<i class="' + (given[i] === d ? 'ok' : 'no') + '">' + d + '</i>';

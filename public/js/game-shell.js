@@ -72,7 +72,7 @@
 
   BB.finish = async function (game, score, meta) {
     const r = await BB.submitScore(game, score, meta);
-    if (r.newBest) BB.toast('Personal best');
+    if (r.newBest) { BB.toast('Personal best'); if (BB.fx) BB.fx.confetti(); }
     return r;
   };
 
