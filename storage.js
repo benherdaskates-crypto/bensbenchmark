@@ -139,16 +139,16 @@ function jsonBackend() {
 /* ---------------------------------------------------------------- */
 /* Postgres backend                                                  */
 /* ---------------------------------------------------------------- */
-function pgBackend(url) {
+function pgBackend(url, directUrl) {
   const { Pool } = require('pg');
-  // Neon and most hosted Postgres require TLS.
-  const pool = new Pool({
-    connectionString: url,
-    ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false },
-    max: 5,
-    idleTimeoutMillis: 30000,
-  });
+  // Hosted Postgres needs TLS. When the address says how (Neon's ?sslmode=require),
+  // let it decide, so the certificate is checked; otherwise ask for TLS without checks.
+  const tls = (u) => (/localhost|127\.0\.0\.1/.test(u) ? false : /[?&]sslmode=/.test(u) ? undefined : { rejectUnauthorized: false });
+  const pool = new Pool({ connectionString: url, ssl: tls(url), max: 5, idleTimeoutMillis: 30000 });
   pool.on('error', (e) => console.error('postgres pool error:', e.message));
+  // Table setup runs once at start over the direct (unpooled) connection when there
+  // is one, as Neon advises for schema changes; app traffic uses the pooled one.
+  let admin = pool;
 
   const rowToUser = (r) => (!r ? null : {
     id: r.id,
@@ -174,7 +174,12 @@ function pgBackend(url) {
     pool,
 
     async init() {
-      await pool.query(`
+      if (directUrl && directUrl !== url) admin = new Pool({ connectionString: directUrl, ssl: tls(directUrl), max: 1 });
+      try { await this.setup(); } finally { if (admin !== pool) { await admin.end().catch(() => {}); admin = pool; } }
+    },
+
+    async setup() {
+      await admin.query(`
         CREATE TABLE IF NOT EXISTS users (
           id             TEXT PRIMARY KEY,
           username       TEXT NOT NULL,
@@ -222,9 +227,9 @@ function pgBackend(url) {
 
     /* Wipe players once when DATA_EPOCH goes up. True if it did. */
     async applyEpoch() {
-      const { rows } = await pool.query("SELECT value FROM meta WHERE key = 'epoch'");
+      const { rows } = await admin.query("SELECT value FROM meta WHERE key = 'epoch'");
       if (rows[0] && Number(rows[0].value) >= DATA_EPOCH) return false;
-      const client = await pool.connect();
+      const client = await admin.connect();
       try {
         await client.query('BEGIN');
         for (const t of ['sessions', 'users', 'plays', 'daily_stats']) await client.query(`DELETE FROM ${t}`);
@@ -245,7 +250,7 @@ function pgBackend(url) {
     /* Carry over anything already in data/db.json, once. */
     async importFromFile() {
       if (!fs.existsSync(DB_FILE)) return;
-      const { rows } = await pool.query('SELECT count(*)::int AS n FROM users');
+      const { rows } = await admin.query('SELECT count(*)::int AS n FROM users');
       if (rows[0].n > 0) return;                       // database already in use
       let old;
       try { old = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch (e) { return; }
@@ -254,7 +259,7 @@ function pgBackend(url) {
 
       for (const u of old.users) {
         const played = Object.values(u.history || {}).reduce((a, h) => a + h.length, 0);
-        await pool.query(
+        await admin.query(
           `INSERT INTO users (id, username, username_lower, password_hash, created, last_seen, best, history, games_played)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
           [u.id, u.username, u.username.toLowerCase(), u.passwordHash,
@@ -263,20 +268,20 @@ function pgBackend(url) {
         );
       }
       for (const s of old.sessions || []) {
-        await pool.query(
+        await admin.query(
           `INSERT INTO sessions (id, user_id, token_hash, device, created, last_seen, expires)
            VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
           [s.id, s.userId, s.tokenHash, s.device, s.created, s.lastSeen, s.expires]
         ).catch(() => {});
       }
       for (const r of old.requests || []) {
-        await pool.query(
+        await admin.query(
           'INSERT INTO requests (id, from_name, message, at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
           [r.id, r.from, r.message, r.at]
         ).catch(() => {});
       }
       for (const [key, row] of Object.entries(old.dailyStats || {})) {
-        await pool.query(
+        await admin.query(
           'INSERT INTO daily_stats (key, tries, fail) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
           [key, JSON.stringify(row.t), row.fail || 0]
         ).catch(() => {});
@@ -429,7 +434,7 @@ module.exports = {
     const url = process.env.DATABASE_URL;
     if (url) {
       try {
-        store = pgBackend(url);
+        store = pgBackend(url, process.env.DATABASE_URL_UNPOOLED);
         await store.init();
         console.log('Storage: Postgres. Accounts and scores survive restarts and deploys.');
         return store;
