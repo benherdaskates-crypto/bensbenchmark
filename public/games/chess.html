@@ -416,7 +416,8 @@
     var p = game.b[sq];
     if (p && canMove() && Chess.colorOf(p) === game.t) {
       select(sq);
-      var pc = sqEl.querySelector('.ch-pc');
+      // select() redraws the board, so take the piece from the fresh squares
+      var pc = document.querySelector('#board [data-sq="' + sq + '"] .ch-pc');
       drag = { from: sq, x: e.clientX, y: e.clientY, pc: pc, ghost: null, id: e.pointerId };
     } else { sel = -1; hints = []; render(); }
   });
@@ -425,7 +426,9 @@
     if (!drag.ghost && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 5) {
       drag.ghost = drag.pc.cloneNode(true);
       drag.ghost.classList.add('ch-drag');
-      drag.ghost.style.fontSize = getComputedStyle(drag.pc).fontSize;
+      // the board may be scaled up with the page; the dragged copy lives outside it
+      var zoom = parseFloat(document.getElementById('mount').style.zoom) || 1;
+      drag.ghost.style.fontSize = (parseFloat(getComputedStyle(drag.pc).fontSize) || 48) * zoom + 'px';
       document.body.appendChild(drag.ghost);
       drag.pc.classList.add('lift');
     }
