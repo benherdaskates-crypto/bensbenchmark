@@ -279,8 +279,16 @@
   };
 
   /* ---------- Storage ---------- */
-  function lsGet(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
-  function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  /* Scores, streaks, daily results and progress saved in this browser belong to
+     whoever is signed in, so two accounts on one device never share them.
+     bb_who remembers the last account so pages can read the right copy at once. */
+  const PER_USER = /^bb_(best|wordle|hangman|conn|streak_|played_|daily|chess$|ach$|ach_seen$)/;
+  const who = () => { try { return localStorage.getItem('bb_who') || ''; } catch (e) { return ''; } };
+  const scoped = (k) => (PER_USER.test(k) && who() ? k + '@' + who() : k);
+  function rawGet(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
+  function lsGet(k, d) { return rawGet(scoped(k), d); }
+  function lsSet(k, v) { try { localStorage.setItem(scoped(k), JSON.stringify(v)); } catch (e) {} }
+  function setWho(u) { try { if (u) localStorage.setItem('bb_who', u.username.toLowerCase()); else localStorage.removeItem('bb_who'); } catch (e) {} }
   BB.lsGet = lsGet;
   BB.lsSet = lsSet;
 
@@ -296,6 +304,16 @@
         if (k && k.indexOf('bb_') === 0 && !keep[k]) localStorage.removeItem(k);
       }
       localStorage.setItem('bb_data_v', String(DATA_VERSION));
+    } catch (e) {}
+  })();
+  // Once per device: drop the old shared best scores, which could belong to any
+  // account that used this browser. Accounts keep everything on the server.
+  (function splitAccounts() {
+    try {
+      if (localStorage.getItem('bb_scoped') === '1') return;
+      localStorage.removeItem('bb_best');
+      localStorage.removeItem('bb_ach');
+      localStorage.setItem('bb_scoped', '1');
     } catch (e) {}
   })();
 
@@ -322,28 +340,39 @@
   BB.user = null;
   let mePromise = null;
   BB.loadUser = function (force) {
-    if (!mePromise || force) mePromise = api('/api/me').then((d) => { BB.user = d.user; return d.user; }).catch(() => null);
+    if (!mePromise || force) mePromise = api('/api/me').then((d) => {
+      // A different account than this page loaded with: reload so it reads that account's stats.
+      const was = who();
+      BB.user = d.user; setWho(d.user);
+      if (d.user && was !== d.user.username.toLowerCase() && was) location.reload();
+      return d.user;
+    }).catch(() => null);
     return mePromise;
   };
   BB.login = async function (username, password) {
     const d = await api('/api/login', { method: 'POST', body: JSON.stringify({ username, password }) });
-    BB.user = d.user; mePromise = Promise.resolve(d.user);
+    BB.user = d.user; mePromise = Promise.resolve(d.user); setWho(d.user);
     await BB.pushLocalScores();
     return d.user;
   };
   BB.register = async function (username, password) {
     const d = await api('/api/register', { method: 'POST', body: JSON.stringify({ username, password }) });
-    BB.user = d.user; mePromise = Promise.resolve(d.user);
+    BB.user = d.user; mePromise = Promise.resolve(d.user); setWho(d.user);
     await BB.pushLocalScores();
     return d.user;
   };
   BB.logout = async function () {
     await api('/api/logout', { method: 'POST' });
-    BB.user = null; mePromise = Promise.resolve(null);
+    BB.user = null; mePromise = Promise.resolve(null); setWho(null);
   };
+  // Guest play goes to the account that signs in, once, and is then cleared so
+  // the next account on this device starts clean.
   BB.pushLocalScores = async function () {
-    const best = lsGet('bb_best', {});
+    const best = rawGet('bb_best', {});
     if (!BB.user) return;
+    const guestAch = rawGet('bb_ach', null);
+    try { localStorage.removeItem('bb_best'); localStorage.removeItem('bb_ach'); } catch (e) {}
+    if (guestAch) { try { await api('/api/achievements/check', { method: 'POST', body: JSON.stringify({ local: guestAch }) }); } catch (e) {} }
     for (const k of Object.keys(best)) {
       if (!BB.GAMES[k]) continue;
       try { await api('/api/score', { method: 'POST', body: JSON.stringify({ game: k, score: best[k] }) }); } catch (e) {}
