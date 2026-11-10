@@ -886,3 +886,14 @@ textarea.input { resize: vertical; min-height: 110px; }
   padding: .28em .5em; box-sizing: border-box; overflow: hidden; text-shadow: 0 4px 18px rgba(0,0,0,.45);
   background: linear-gradient(90deg, transparent, var(--fxb) 14%, var(--fxb) 86%, transparent); }
 .fx-banner small { display: block; font-size: .36em; letter-spacing: .2em; opacity: .85; margin-top: .25em; font-weight: 700; }
+
+/* ---------- Game logos carry their own tile ---------- */
+.glogo { display: block; width: 1.6em; height: 1.6em; flex: none; filter: drop-shadow(0 3px 8px rgba(0,0,0,.25)); }
+.game-glyph:has(.glogo), .glyph:has(.glogo), .gi:has(.glogo), .board-head .g:has(.glogo) {
+  background: none !important; border: 0 !important; padding: 0 !important; box-shadow: none !important; overflow: visible; }
+.game-glyph svg.glogo, .glyph svg.glogo, .gi svg.glogo, .board-head .g svg.glogo { width: 100%; height: 100%; }
+.game-head .glyph:has(.glogo) { width: 52px; height: 52px; }
+.game-head .glyph .glogo { filter: drop-shadow(0 8px 22px color-mix(in srgb, var(--tile) 45%, transparent)); }
+.gcard-title .game-glyph { width: 40px; height: 40px; }
+.gcard:hover .glogo { transform: rotate(-6deg) scale(1.08); }
+.glogo { transition: transform .35s var(--spring); }

@@ -10,19 +10,68 @@
   BB.SITE = 'https://www.bensbenchmark.top';
 
   /* ---------- Icons ---------- */
-  const ICON_WORDLE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="6" height="10" rx="1.4"/><rect x="9" y="7" width="6" height="10" rx="1.4" fill="currentColor" stroke="none"/><rect x="16" y="7" width="6" height="10" rx="1.4"/></svg>';
-  const ICON_CONNECTIONS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.6"/><rect x="13" y="3" width="8" height="8" rx="1.6" fill="currentColor" stroke="none"/><rect x="3" y="13" width="8" height="8" rx="1.6" fill="currentColor" stroke="none"/><rect x="13" y="13" width="8" height="8" rx="1.6"/></svg>';
-  const ICON_HANGMAN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18h4M10 18h4M16 18h4"/><path d="M6 11V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4"/><path d="M12 5V3"/></svg>';
-  const ICON_TYPING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.4"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01"/><path d="M9 16h6"/><path d="M10 13h4"/></svg>';
-  const ICON_REACTION = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2Z"/></svg>';
-  const ICON_AIM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.4"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>';
-  const ICON_NUMBER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.4"/><path d="M8 9v6M8 9l2-1.4"/><path d="M13.6 9.6a2 2 0 1 1 2.6 2.2L13.4 15h3.4"/></svg>';
-  const ICON_SEQUENCE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" stroke="none"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" stroke="none"/></svg>';
-  const ICON_VERBAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10.5 5 8.5 4.3 6 4.3c-1 0-1.8.1-2.5.3v13c.7-.2 1.5-.3 2.5-.3 2.5 0 4.5.7 6 2.2"/><path d="M12 6.5c1.5-1.5 3.5-2.2 6-2.2 1 0 1.8.1 2.5.3v13c-.7-.2-1.5-.3-2.5-.3-2.5 0-4.5.7-6 2.2"/><path d="M12 6.5v13"/></svg>';
-  const ICON_BRILLION = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12c3-5 9-6.5 14-2.5L21 6.5v11l-4.5-3C11.5 18.5 5.5 17 2.5 12Z"/><circle cx="7.6" cy="11.2" r="1" fill="currentColor" stroke="none"/></svg>';
-  const ICON_PRICEDLE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13 21a1.4 1.4 0 0 1-2 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.6" cy="7.6" r="1.6"/></svg>';
-  const ICON_CHESS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 20h10"/><path d="M9 20c0-3 1-5 3-7-2.5 0-4 .5-5.5 2L5 13.5C6 10 8.5 6.5 12 4.5l1-1.5 1 2c2.5 1.3 4 4 4 7.5V20"/><circle cx="13.2" cy="8.2" r=".6" fill="currentColor"/></svg>';
-  const ICON_GREENS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 20V3"/><path d="M7 3.5l10 3.7L7 11"/><ellipse cx="11" cy="20.4" rx="8" ry="1.6"/></svg>';
+  /* ---------- Game logos ----------
+     Full-colour app-style marks, one per game, drawn on a 48 grid. Each carries
+     its own tile, so it reads the same on a card, a header or a picker. */
+  const logo = (bg, inner) => '<svg class="glogo" viewBox="0 0 48 48" aria-hidden="true">' +
+    '<rect width="48" height="48" rx="12" fill="' + bg + '"/>' +
+    '<path d="M12 0h24a12 12 0 0 1 12 12v6C34 24 14 24 0 18v-6A12 12 0 0 1 12 0z" fill="#fff" opacity=".12"/>' +
+    inner + '<rect x=".75" y=".75" width="46.5" height="46.5" rx="11.3" fill="none" stroke="#000" stroke-opacity=".18" stroke-width="1.5"/></svg>';
+  const T = (x, y, s, t, fill) => '<text x="' + x + '" y="' + y + '" font-family="Outfit, Inter, sans-serif" font-weight="800" font-size="' + s + '" text-anchor="middle" fill="' + (fill || '#fff') + '">' + t + '</text>';
+  const ICON_WORDLE = logo('#3d7f41',
+    '<rect x="8" y="8" width="15" height="15" rx="3.5" fill="#6aaa64" stroke="#fff" stroke-opacity=".5"/>' + T(15.5, 19.6, 11, 'W') +
+    '<rect x="25" y="8" width="15" height="15" rx="3.5" fill="#c9b458"/>' + T(32.5, 19.6, 11, 'O') +
+    '<rect x="8" y="25" width="15" height="15" rx="3.5" fill="#3a3a40"/>' + T(15.5, 36.6, 11, 'R') +
+    '<rect x="25" y="25" width="15" height="15" rx="3.5" fill="#6aaa64" stroke="#fff" stroke-opacity=".5"/>' + T(32.5, 36.6, 11, 'D'));
+  const ICON_CONNECTIONS = logo('#5d4fc0',
+    '<rect x="8" y="8.5" width="32" height="6.5" rx="3.25" fill="#f9df6d"/>' +
+    '<rect x="8" y="16.8" width="32" height="6.5" rx="3.25" fill="#a0c35a"/>' +
+    '<rect x="8" y="25.1" width="32" height="6.5" rx="3.25" fill="#b0c4ef"/>' +
+    '<rect x="8" y="33.4" width="32" height="6.5" rx="3.25" fill="#ba81c5"/>' +
+    '<circle cx="12.5" cy="11.75" r="1.6" fill="#5a4d12"/><circle cx="12.5" cy="20.05" r="1.6" fill="#3d5418"/><circle cx="12.5" cy="28.35" r="1.6" fill="#2d4778"/><circle cx="12.5" cy="36.65" r="1.6" fill="#5b2d66"/>');
+  const ICON_HANGMAN = logo('#b0561f',
+    '<path d="M10 39h18M15 39V9h15v5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<circle cx="30" cy="18.5" r="4.3" fill="none" stroke="#ffe3c2" stroke-width="2.6"/>' +
+    '<path d="M30 23v8.5M30 25.5l-4.2 3.6M30 25.5l4.2 3.6M30 31.5l-3.6 5.2M30 31.5l3.6 5.2" fill="none" stroke="#ffe3c2" stroke-width="2.4" stroke-linecap="round"/>');
+  const ICON_TYPING = logo('#1f6fb0',
+    '<rect x="6" y="15" width="36" height="22" rx="4.5" fill="#fff"/>' +
+    '<g fill="#1f6fb0"><rect x="10" y="19" width="4" height="4" rx="1"/><rect x="16" y="19" width="4" height="4" rx="1"/><rect x="22" y="19" width="4" height="4" rx="1"/><rect x="28" y="19" width="4" height="4" rx="1"/><rect x="34" y="19" width="4" height="4" rx="1"/>' +
+    '<rect x="12" y="25" width="4" height="4" rx="1"/><rect x="18" y="25" width="4" height="4" rx="1"/><rect x="24" y="25" width="4" height="4" rx="1"/><rect x="30" y="25" width="4" height="4" rx="1"/>' +
+    '<rect x="15" y="31" width="18" height="3" rx="1.5"/></g>' +
+    '<rect x="21.5" y="7" width="2.6" height="6" rx="1.3" fill="#9fd4ff"/>');
+  const ICON_REACTION = logo('#c48a17',
+    '<circle cx="24" cy="24" r="15.5" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2.4"/>' +
+    '<path d="M26.6 8.5 14.5 26.4h8.2L20.8 39.5 33.5 21.2h-8.4z" fill="#fff" stroke="#7a4e00" stroke-width="1.4" stroke-linejoin="round"/>');
+  const ICON_AIM = logo('#c23535',
+    '<circle cx="24" cy="24" r="15" fill="#fff"/><circle cx="24" cy="24" r="10.6" fill="#c23535"/><circle cx="24" cy="24" r="6.2" fill="#fff"/><circle cx="24" cy="24" r="2.6" fill="#c23535"/>' +
+    '<path d="M24 4.5v6M24 37.5v6M4.5 24h6M37.5 24h6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>');
+  const ICON_NUMBER = logo('#6a32b8',
+    '<rect x="7" y="12" width="34" height="24" rx="6" fill="#fff" fill-opacity=".14" stroke="#fff" stroke-opacity=".4"/>' + T(24, 30.5, 17, '123') +
+    '<circle cx="38" cy="10" r="4" fill="#ffd23f"/>');
+  const ICON_SEQUENCE = logo('#118a8a',
+    '<g fill="#fff" fill-opacity=".22"><rect x="8" y="8" width="9" height="9" rx="2.2"/><rect x="31" y="8" width="9" height="9" rx="2.2"/><rect x="19.5" y="19.5" width="9" height="9" rx="2.2"/><rect x="8" y="31" width="9" height="9" rx="2.2"/><rect x="19.5" y="31" width="9" height="9" rx="2.2"/></g>' +
+    '<g fill="#fff"><rect x="19.5" y="8" width="9" height="9" rx="2.2"/><rect x="8" y="19.5" width="9" height="9" rx="2.2"/><rect x="31" y="19.5" width="9" height="9" rx="2.2"/><rect x="31" y="31" width="9" height="9" rx="2.2"/></g>' +
+    '<circle cx="35.5" cy="35.5" r="2" fill="#118a8a"/>');
+  const ICON_VERBAL = logo('#9e2c70',
+    '<path d="M10 11h28a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H22l-7.5 6v-6H10a4 4 0 0 1-4-4V15a4 4 0 0 1 4-4z" fill="#fff"/>' + T(24, 27.3, 12.5, 'Aa', '#9e2c70'));
+  const ICON_BRILLION = logo('#1c6fb8',
+    '<path d="M4 33c4-2.4 8-2.4 12 0s8 2.4 12 0 8-2.4 12 0 6 2 8 1.4V48H4z" fill="#0d3f78" fill-opacity=".55"/>' +
+    '<path d="M9 22.5c4.6-6.4 13.6-7.6 19.6-2.4l5.4-4.2v13.2l-5.4-4.2c-6 5.2-15 4-19.6-2.4z" fill="#fff"/>' +
+    '<circle cx="15" cy="21.5" r="1.7" fill="#1c6fb8"/>' +
+    '<circle cx="36" cy="10" r="2.2" fill="none" stroke="#bfe6ff" stroke-width="1.4"/><circle cx="40" cy="16" r="1.4" fill="none" stroke="#bfe6ff" stroke-width="1.2"/>' +
+    '<path d="M38.5 31.5l1.3 2.8 2.8 1.3-2.8 1.3-1.3 2.8-1.3-2.8-2.8-1.3 2.8-1.3z" fill="#ffd23f"/>');
+  const ICON_PRICEDLE = logo('#c4402c',
+    '<path d="M9 9h15.5l15.2 15.2a3 3 0 0 1 0 4.2L28.4 39.7a3 3 0 0 1-4.2 0L9 24.5z" fill="#fff"/>' +
+    '<circle cx="16" cy="16" r="2.6" fill="#c4402c"/>' + T(27.5, 32, 13, '$', '#c4402c'));
+  const ICON_GREENS = logo('#2f8a45',
+    '<ellipse cx="24" cy="37" rx="18" ry="6.5" fill="#7dca6f"/><ellipse cx="24" cy="37" rx="8" ry="2.8" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.2"/>' +
+    '<circle cx="24" cy="37" r="1.6" fill="#123"/>' +
+    '<path d="M24 37V8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M24.5 8.5 37 13l-12.5 4.6z" fill="#e5484d"/>' +
+    '<circle cx="13" cy="33" r="2.4" fill="#fff"/>');
+  const ICON_CHESS = logo('#8a5a33',
+    '<path d="M14 40c-.3-6.2 2.1-10.5 6.6-13.6-3 .2-5.6 1.4-7.8 3.6l-3.1-2.9c.4-5.4 4.3-10.4 9.2-12.8l.6-3.8 3.4 3.1C30.7 14.1 35 19.9 35 28.1V40z" transform="translate(1.5 -1)" fill="#fbfbf8" stroke="#2b1a0e" stroke-width="1.6" stroke-linejoin="round"/>' +
+    '<circle cx="22.1" cy="18.1" r="1.4" fill="#2b1a0e"/>' +
+    '<rect x="10" y="39" width="28" height="4" rx="2" fill="#fbfbf8" stroke="#2b1a0e" stroke-width="1.4"/>');
 
   const ICON = {
     sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>',

@@ -42,8 +42,10 @@
   .ch-sq.sel::before { content: ''; position: absolute; inset: 0; background: rgba(110, 200, 120, .55); }
   .ch-sq.check::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle, rgba(255,40,40,.95) 0%, rgba(255,40,40,.55) 45%, transparent 75%); animation: chCheck 1s ease-in-out infinite alternate; }
   @keyframes chCheck { to { opacity: .6; } }
-  .ch-sq.hint::after { content: ''; width: 30%; height: 30%; border-radius: 50%; background: rgba(20, 30, 20, .28); z-index: 2; pointer-events: none; }
-  .ch-sq.hint.cap::after { width: 86%; height: 86%; background: transparent; border: 6px solid rgba(20, 30, 20, .28); box-sizing: border-box; }
+  /* Move dots sit on top of the square, out of the layout, so nothing shifts when a piece is picked up. */
+  .ch-sq.mv::after { content: ''; position: absolute; left: 50%; top: 50%; width: 30%; height: 30%; transform: translate(-50%, -50%);
+    border-radius: 50%; background: rgba(20, 30, 20, .28); z-index: 4; pointer-events: none; }
+  .ch-sq.mv.cap::after { width: 92%; height: 92%; background: radial-gradient(circle, transparent 62%, rgba(20, 30, 20, .3) 64%); }
   .ch-sq.over { box-shadow: inset 0 0 0 4px rgba(255, 255, 255, .7); }
   .ch-sq .co { position: absolute; font-size: .62rem; font-weight: 700; opacity: .75; pointer-events: none; }
   .ch-sq .co.r { left: 4px; top: 3px; } .ch-sq .co.f { right: 4px; bottom: 2px; }
@@ -104,6 +106,19 @@
   .ch-promo button { width: 64px; height: 64px; padding: 6px; border-radius: 10px; border: 0; background: var(--surface-2); cursor: pointer; transition: transform .15s var(--spring), background .15s; }
   .ch-promo button:hover { transform: translateY(-3px); }
   .ch-promo button:hover { background: var(--tile); }
+  /* Move ratings against the computer: a badge on the piece, a line in the panel, a mark in the list. */
+  .ch-grade { position: absolute; right: -6%; top: -6%; z-index: 6; width: 38%; height: 38%; border-radius: 50%; display: grid; place-items: center;
+    color: #fff; font: 900 clamp(9px, 2.4cqw, 17px)/1 var(--font-display); letter-spacing: -.04em; background: var(--gc);
+    box-shadow: 0 2px 6px rgba(0,0,0,.4), inset 0 -2px 0 rgba(0,0,0,.2); border: 2px solid #fff; pointer-events: none;
+    animation: chGrade .55s cubic-bezier(.3,1.8,.5,1) both; }
+  @keyframes chGrade { 0% { transform: scale(0) rotate(-40deg); } 100% { transform: none; } }
+  .ch-verdict { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 11px; border-radius: 12px;
+    background: color-mix(in srgb, var(--gc) 16%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--gc) 45%, transparent); animation: chSay .4s var(--spring) both; }
+  .ch-verdict .dot { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--gc);
+    font: 900 .85rem/1 var(--font-display); }
+  .ch-verdict b { color: var(--gc); }
+  .ch-verdict small { display: block; color: var(--muted); font-size: .76rem; margin-top: 1px; }
+  .ch-moves .g { font-weight: 800; margin-left: 3px; }
   .ch-fly { position: fixed; z-index: 9995; pointer-events: none; display: grid; place-items: center; }
   .ch-banner { position: absolute; left: -4%; right: -4%; top: 50%; z-index: 18; transform: translateY(-50%); text-align: center; pointer-events: none;
     font-family: var(--font-display); font-weight: 900; letter-spacing: .12em; font-size: clamp(2rem, 8cqw, 4.6rem); color: #fff;
@@ -230,7 +245,7 @@
 
   /* ---------------- game setup ---------------- */
   function newBotGame(level, color, moves) {
-    botLevel = level; me = color; flipped = color === 'b'; over = null; sel = -1; viewing = -1;
+    botLevel = level; me = color; flipped = color === 'b'; over = null; sel = -1; viewing = -1; grades = [];
     game = Chess.replay(moves || []);
     if (!moves) { store.played++; BB.lsSet('bb_chess', store); }
     save();
@@ -354,6 +369,8 @@
     var kingInCheck = !st.over && st.check ? findKing(game.t) : -1;
     if (st.over && st.reason === 'checkmate') kingInCheck = findKing(game.t);
     var html = '';
+    // The rating badge sits on the square your last graded move landed on.
+    var gp = lastGradedPly(), badgeSq = gp >= 0 ? game.moves[gp].to : -1, badge = gp >= 0 ? GRADES[grades[gp].label] : null;
     for (var i = 0; i < 64; i++) {
       var sq = flipped ? 63 - i : i, r = sq >> 3, f = sq & 7, p = game.b[sq];
       var cls = 'ch-sq ' + ((r + f) % 2 ? 'd' : 'l');
@@ -361,12 +378,13 @@
       if (sq === sel) cls += ' sel';
       if (sq === kingInCheck) cls += ' check';
       var h = hints.filter(function (m) { return m.to === sq; })[0];
-      if (h) cls += ' hint' + (h.cap ? ' cap' : '');
+      if (h) cls += ' mv' + (h.cap ? ' cap' : '');
       var co = '';
       if ((i & 7) === 0) co += '<span class="co r">' + (8 - r) + '</span>';
       if (i >= 56) co += '<span class="co f">' + 'abcdefgh'[f] + '</span>';
       html += '<div class="' + cls + '" data-sq="' + sq + '">' + co +
-        (p ? '<div class="ch-pc ' + Chess.colorOf(p) + '" data-pc="' + sq + '">' + ChessPieces.svg(p) + '</div>' : '') + '</div>';
+        (p ? '<div class="ch-pc ' + Chess.colorOf(p) + '" data-pc="' + sq + '">' + ChessPieces.svg(p) + '</div>' : '') +
+        (sq === badgeSq && badge ? '<span class="ch-grade" style="--gc:' + badge.c + '" title="' + badge.t + '">' + badge.s + '</span>' : '') + '</div>';
     }
     board.innerHTML = html;
     if (anim) slide(anim);
@@ -378,11 +396,80 @@
 
   function findKing(c) { var K = c === 'w' ? 'K' : 'k'; return game.b.indexOf(K); }
 
+  /* ---------------- move ratings (against the computer only) ---------------- */
+  var GRADES = {
+    brilliant:  { t: 'Brilliant',  s: '!!', c: '#1baca6', say: 'A brilliant move' },
+    great:      { t: 'Great',      s: '!',  c: '#5b8bd6', say: 'A great move, the only good one' },
+    best:       { t: 'Best',       s: '★', c: '#81b64c', say: 'The best move' },
+    excellent:  { t: 'Excellent',  s: '✓', c: '#81b64c', say: 'An excellent move' },
+    good:       { t: 'Good',       s: '✓', c: '#95b776', say: 'A good move' },
+    book:       { t: 'Book',       s: '▤', c: '#a88865', say: 'A book move' },
+    forced:     { t: 'Forced',     s: '→', c: '#96af8b', say: 'The only legal move' },
+    inaccuracy: { t: 'Inaccuracy', s: '?!', c: '#f0b429', say: 'An inaccuracy' },
+    mistake:    { t: 'Mistake',    s: '?',  c: '#e58f2a', say: 'A mistake' },
+    blunder:    { t: 'Blunder',    s: '??', c: '#ca3431', say: 'A blunder' },
+  };
+  var grades = [], gradeWorker = null, gradeId = 0;
+
+  function lastGradedPly() {
+    if (MODE !== 'bot') return -1;
+    // only the newest of your moves gets a badge on the board
+    for (var i = game.moves.length - 1; i >= 0; i--) {
+      var mover = i % 2 === 0 ? 'w' : 'b';
+      if (mover === me) return grades[i] && grades[i].uci === game.moves[i].uci && GRADES[grades[i].label] ? i : -1;
+    }
+    return -1;
+  }
+
+  function gradeMove(ply) {
+    if (MODE !== 'bot' || ply < 0) return;
+    grades.length = Math.min(grades.length, ply);
+    if (!gradeWorker) {
+      try { gradeWorker = new Worker('/js/games/chess-worker.js'); } catch (e) { return; }
+      gradeWorker.onmessage = function (e) { onGrade(e.data); };
+    }
+    var before = game.moves.slice(0, ply).map(function (m) { return m.uci; });
+    // The first moves of a known opening count as book.
+    var book = ply < 8 && Chess.bookMove && isBook(before, game.moves[ply].uci);
+    gradeWorker.postMessage({ type: 'grade', id: ++gradeId, ply: ply, moves: before, uci: game.moves[ply].uci, book: book });
+  }
+  function isBook(before, uci) {
+    var t = Chess.replay(before), seen = {};
+    for (var k = 0; k < 24; k++) { var b = Chess.bookMove(t); if (b) seen[Chess.uci(b)] = 1; }
+    return !!seen[uci];
+  }
+
+  function onGrade(d) {
+    if (!d.result || !game.moves[d.ply] || game.moves[d.ply].uci !== d.uci) return;
+    grades[d.ply] = { label: d.result.label, uci: d.uci, best: d.result.bestSan, loss: d.result.loss };
+    var g = GRADES[d.result.label];
+    if (!g) return;
+    // Show the verdict without disturbing a piece the player is dragging.
+    if (!drag) render();
+    var el = document.getElementById('say');
+    var weak = ['inaccuracy', 'mistake', 'blunder'].indexOf(d.result.label) > -1;
+    if (el && !(MODE === 'bot' && BOTS[botLevel - 1].boss && el.querySelector('.ch-say'))) {
+      el.innerHTML = '<div class="ch-verdict" style="--gc:' + g.c + '"><span class="dot">' + g.s + '</span><div><b>' +
+        BB.esc(game.moves[d.ply].san) + '</b> &middot; ' + g.say +
+        (weak && d.result.bestSan ? '<small>Best was ' + BB.esc(d.result.bestSan) + '</small>' : '') + '</div></div>';
+    }
+    var sqEl = document.querySelector('#board [data-sq="' + game.moves[d.ply].to + '"]');
+    if (BB.fx && sqEl) {
+      if (d.result.label === 'brilliant') { BB.fx.banner(document.getElementById('board'), 'Brilliant', { tone: '#1baca6', hold: 900 }); BB.fx.confetti({ colors: ['#1baca6', '#ffffff', '#7fe0d8'], count: 90 }); }
+      else if (d.result.label === 'great') BB.fx.ring(sqEl, g.c, { size: 120 });
+      else if (d.result.label === 'blunder') BB.fx.shake(document.getElementById('board'), 6);
+    }
+  }
+
   function moveList() {
     var el = document.getElementById('moves'), m = game.moves, html = '';
+    var mark = function (ply) {
+      var g = grades[ply] && GRADES[grades[ply].label];
+      return g && g.s ? '<span class="g" style="color:' + g.c + '" title="' + g.t + '">' + g.s + '</span>' : '';
+    };
     for (var i = 0; i < m.length; i += 2) {
-      html += '<span class="n">' + (i / 2 + 1) + '.</span><span' + (i === m.length - 1 ? ' class="cur"' : '') + '>' + m[i].san + '</span>' +
-        '<span' + (i + 1 === m.length - 1 ? ' class="cur"' : '') + '>' + (m[i + 1] ? m[i + 1].san : '') + '</span>';
+      html += '<span class="n">' + (i / 2 + 1) + '.</span><span' + (i === m.length - 1 ? ' class="cur"' : '') + '>' + m[i].san + mark(i) + '</span>' +
+        '<span' + (i + 1 === m.length - 1 ? ' class="cur"' : '') + '>' + (m[i + 1] ? m[i + 1].san + mark(i + 1) : '') + '</span>';
     }
     el.innerHTML = html || '<span class="muted" style="grid-column:1/-1">No moves yet</span>';
     el.scrollTop = el.scrollHeight;
@@ -523,7 +610,7 @@
     if (MODE === 'local') {
       BB.lsSet('bb_chess_local', { moves: game.moves.map(function (x) { return x.uci; }) });
     }
-    if (MODE === 'bot') { save(); maybeBot(); }
+    if (MODE === 'bot') { gradeMove(game.moves.length - 1); save(); maybeBot(); }
   }
 
   function afterMove(m, dropped) {
@@ -621,7 +708,7 @@
     var list = game.moves.map(function (m) { return m.uci; });
     list.pop();
     if (list.length && (list.length % 2 === 0) !== (me === 'w')) list.pop();
-    game = Chess.replay(list); sel = -1; hints = [];
+    game = Chess.replay(list); sel = -1; hints = []; grades.length = Math.min(grades.length, list.length);
     save(); render(); maybeBot();
   }
 

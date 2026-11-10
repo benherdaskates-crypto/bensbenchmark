@@ -527,7 +527,7 @@
       const close = scored.filter((r) => r.v >= scored[0].v - opts.noise);
       pick = close[Math.floor(Math.random() * close.length)];
     }
-    return { move: pick.m, score: pick.v, depth: done, nodes };
+    return { move: pick.m, score: pick.v, depth: done, nodes, second: scored[1] ? scored[1].v : null, scored };
   }
 
   /* ---------- Opening book for the final boss ---------- */
@@ -590,7 +590,7 @@
 
   const Chess = {
     START, create, fen, moves, make, unmake, play, san, uci, fromUci, status, inCheck, evaluate, search,
-    botMove, bookMove, BOTS, sqName, sqIndex, colorOf,
+    botMove, bookMove, BOTS, sqName, sqIndex, colorOf, attacked, VAL,
     clone(s) { const c = create(fen(s)); c.hist = s.hist.slice(); c.moves = s.moves.slice(); c.h1 = s.h1; c.h2 = s.h2; return c; },
     // Rebuild a game from its moves, so repetition history is right.
     replay(list, startFen) { const s = create(startFen); for (const m of list || []) if (!play(s, m)) break; return s; },
