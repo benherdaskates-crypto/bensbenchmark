@@ -30,6 +30,7 @@ const SESSION_DAYS = 90; // how long a remembered device stays logged in
 // ---------- Storage ----------
 // Postgres when DATABASE_URL is set, otherwise a local JSON file.
 const storage = require('./storage');
+const ACH = require('./public/js/achievements.js');
 let store = null;
 
 // Express 4 does not catch rejected promises, so every async route goes
@@ -122,7 +123,31 @@ app.use('/api', wrap(async (req, res, next) => {
 }));
 
 function publicUser(u) {
-  return { id: u.id, username: u.username, created: u.created, best: u.best || {}, history: u.history || {} };
+  return { id: u.id, username: u.username, created: u.created, best: u.best || {}, history: u.history || {}, ach: achOf(u) };
+}
+
+/* ---------- Achievements ----------
+   Progress lives on the user (rounds, games tried, chess bots beaten, unlocked).
+   Older accounts start from their saved history, so nobody begins at zero. */
+function achOf(u) {
+  if (!u.ach || !u.ach.unlocked) {
+    const hist = u.history || {};
+    const games = {};
+    let rounds = 0;
+    for (const k of Object.keys(hist)) { games[k] = hist[k].length; rounds += hist[k].length; }
+    const chess = (hist.chess || []).map((h) => h.s).filter((n, i, a) => Number.isInteger(n) && a.indexOf(n) === i);
+    u.ach = { rounds, games, chess, unlocked: {} };
+  }
+  return u.ach;
+}
+// Unlock anything newly earned; returns the new ids.
+function unlockNew(u) {
+  const a = achOf(u);
+  const ids = ACH.evaluate({ best: u.best || {}, rounds: a.rounds, games: a.games, chess: a.chess });
+  const fresh = ids.filter((id) => !a.unlocked[id]);
+  const now = Date.now();
+  fresh.forEach((id) => { a.unlocked[id] = now; });
+  return fresh;
 }
 async function createSession(res, req, user) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -260,9 +285,75 @@ app.post('/api/score', requireAuth, wrap(async (req, res) => {
   const h = (u.history[game] = u.history[game] || []);
   h.push({ s: n, t: Date.now(), m: meta && typeof meta === 'object' ? meta : undefined });
   if (h.length > storage.HISTORY_CAP) h.splice(0, h.length - storage.HISTORY_CAP);
+  achOf(u);
+  ACH.record(u.ach, game, n);
+  const newAch = unlockNew(u);
   await store.users.save(u);
-  res.json({ best: u.best[game], newBest: better });
+  res.json({ best: u.best[game], newBest: better, newAch });
 }));
+
+// Catch up after signing in, folding in what this browser earned as a guest.
+app.post('/api/achievements/check', requireAuth, wrap(async (req, res) => {
+  const u = req.user, a = achOf(u), local = (req.body && req.body.local) || {};
+  if (Number.isInteger(local.rounds)) a.rounds = Math.max(a.rounds || 0, Math.min(local.rounds, 100000));
+  if (local.games && typeof local.games === 'object') {
+    for (const k of Object.keys(local.games)) if (GAMES[k]) a.games[k] = Math.max(a.games[k] || 0, Math.min(Number(local.games[k]) || 0, 100000));
+  }
+  if (Array.isArray(local.chess)) local.chess.forEach((l) => { if (Number.isInteger(l) && l >= 1 && l <= 12 && a.chess.indexOf(l) < 0) a.chess.push(l); });
+  const newAch = unlockNew(u);
+  await store.users.save(u);
+  res.json({ ach: a, newAch });
+}));
+
+/* ---------- Other players ---------- */
+function profileCard(u) {
+  const a = achOf(u);
+  return {
+    username: u.username, created: u.created, lastSeen: u.lastSeen,
+    bests: Object.keys(u.best || {}).filter((k) => GAMES[k]).length,
+    achievements: Object.keys(a.unlocked || {}).length, rounds: a.rounds || 0,
+  };
+}
+app.get('/api/users', wrap(async (req, res) => {
+  const q = String(req.query.q || '').trim().replace(/^@/, '');
+  if (!/^[A-Za-z0-9_]{1,16}$/.test(q)) return res.json({ users: [] });
+  if (!limit('search:' + req.ip, 120, 60e3)) return res.status(429).json({ error: 'Slow down a moment' });
+  res.json({ users: (await store.users.search(q, 12)).map(profileCard) });
+}));
+app.get('/api/users/:name', wrap(async (req, res) => {
+  const u = await store.users.byLower(String(req.params.name || '').replace(/^@/, '').toLowerCase());
+  if (!u) return res.status(404).json({ error: 'No player by that name' });
+  const a = achOf(u);
+  res.json({ user: { ...profileCard(u), best: u.best || {}, unlocked: a.unlocked || {}, games: a.games || {}, chess: a.chess || [] } });
+}));
+
+/* ---------- Invites: ask another player to join a game ---------- */
+const invites = new Map();   // username_lower -> [{ id, from, game, code, at }]
+const INVITE_MS = 2 * 60 * 60e3;
+app.post('/api/invites', requireAuth, wrap(async (req, res) => {
+  const { to, game, code } = req.body || {};
+  if (!limit('invite:' + req.user.id, 30, 10 * 60e3)) return res.status(429).json({ error: 'Slow down a moment' });
+  const target = await store.users.byLower(String(to || '').replace(/^@/, '').toLowerCase());
+  if (!target) return res.status(404).json({ error: 'No player by that name' });
+  if (target.id === req.user.id) return res.status(400).json({ error: 'That is you' });
+  if (!(VERSUS_GAMES.includes(game) || game === 'chess') || !/^[A-Z0-9]{4}$/.test(String(code || ''))) return res.status(400).json({ error: 'Bad invite' });
+  const key = target.username.toLowerCase();
+  const list = (invites.get(key) || []).filter((i) => Date.now() - i.at < INVITE_MS && i.from !== req.user.username);
+  list.push({ id: crypto.randomBytes(6).toString('hex'), from: req.user.username, game, code, at: Date.now() });
+  invites.set(key, list.slice(-10));
+  res.json({ ok: true });
+}));
+app.get('/api/invites', requireAuth, (req, res) => {
+  const key = req.user.username.toLowerCase();
+  const list = (invites.get(key) || []).filter((i) => Date.now() - i.at < INVITE_MS);
+  invites.set(key, list);
+  res.json({ invites: list });
+});
+app.delete('/api/invites/:id', requireAuth, (req, res) => {
+  const key = req.user.username.toLowerCase();
+  invites.set(key, (invites.get(key) || []).filter((i) => i.id !== req.params.id));
+  res.json({ ok: true });
+});
 
 app.get('/api/leaderboard/:game', wrap(async (req, res) => {
   const g = GAMES[req.params.game];

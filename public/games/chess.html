@@ -169,7 +169,11 @@
     get: function () { try { return JSON.parse(sessionStorage.getItem('bb_chess_seat')); } catch (e) { return null; } },
     set: function (v) { try { if (v) sessionStorage.setItem('bb_chess_seat', JSON.stringify(v)); else sessionStorage.removeItem('bb_chess_seat'); } catch (e) {} },
   };
-  var bossUnlocked = function () { return true; };   // every opponent, Ben included, is open to everyone
+  var bossUnlocked = function () { return true; };
+  // A bot counts as beaten if this browser or your account has beaten it.
+  var beaten = function (level) {
+    return store.beaten.indexOf(level) > -1 || !!(BB.user && BB.user.ach && (BB.user.ach.chess || []).indexOf(level) > -1);
+  };   // every opponent, Ben included, is open to everyone
 
   var game = null, me = 'w', flipped = false, botLevel = 0, sel = -1, hints = [], busy = false, over = null, viewing = -1;
   var worker = null, reqId = 0, online = null;
@@ -204,7 +208,7 @@
             '<span class="ch-av" style="background:' + COLORS[i] + '">' + (b.boss ? ChessPieces.svg('K') : b.name[0]) + '</span>' +
             '<span><span class="lv">' + (b.boss ? 'Final boss' : 'Level ' + b.level) + ' · ' + b.elo + '</span><br><b>' + b.name + '</b><br>' +
             '<span style="font-size:.8rem;opacity:.75">' + (locked ? 'Beat Level 9 or higher to unlock' : b.title) + '</span></span>' +
-            (store.beaten.indexOf(b.level) > -1 ? '<span class="ok">✓</span>' : '') + '</button>';
+            (beaten(b.level) ? '<span class="ok" title="Beaten">✓</span>' : '') + '</button>';
         }).join('') + '</div>' +
         '<div class="row mt-3" style="justify-content:flex-end"><button class="btn" id="go"><span>Play</span></button></div>' +
       '</div>';

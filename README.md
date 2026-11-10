@@ -52,6 +52,16 @@ where it checks every online move. Twelve opponents, from Pip (random moves) to 
 final boss (opening book, iterative deepening, about 3.5 seconds a move). Every opponent
 is open to everyone. Online games use `/api/chess` with a four-letter code.
 
+### Achievements and profiles
+
+`public/js/achievements.js` lists 58 achievements (milestones, three or four tiers
+per game, and one with a checkmark for every chess bot beaten). The server unlocks
+them on each score (stored in the `ach` column), guests earn them in the browser and
+they carry over on sign-in. Profiles show them; `/profile?u=name` shows anyone's
+public profile (no history, devices or ids), with a search bar to find players and a
+Challenge button that makes a room and sends an invite (`/api/invites`, shown as a
+pop-up to the other player).
+
 ### Difficulty
 
 Wordle, Connections, Hangman and Typing have their own difficulty chips. Brillion,

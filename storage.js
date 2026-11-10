@@ -88,6 +88,12 @@ function jsonBackend() {
       async leaderboard() {
         return db.users.map((u) => ({ username: u.username, best: u.best || {} }));
       },
+      async search(q, limit) {
+        const lower = q.toLowerCase();
+        return db.users.filter((u) => u.username.toLowerCase().includes(lower))
+          .sort((a, b) => (a.username.toLowerCase().startsWith(lower) ? -1 : 1) - (b.username.toLowerCase().startsWith(lower) ? -1 : 1) || (b.lastSeen || 0) - (a.lastSeen || 0))
+          .slice(0, limit);
+      },
       async counts(dayAgo, recentAgo) {
         return {
           total: db.users.length,
@@ -185,6 +191,7 @@ function pgBackend(url, directUrl) {
     lastSeen: Number(r.last_seen),
     best: r.best || {},
     history: r.history || {},
+    ach: r.ach || {},
   });
   const rowToSession = (r) => (!r ? null : {
     id: r.id,
@@ -243,6 +250,7 @@ function pgBackend(url, directUrl) {
           tries JSONB NOT NULL DEFAULT '[0,0,0,0,0,0]'::jsonb,
           fail  INTEGER NOT NULL DEFAULT 0
         );
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS ach JSONB NOT NULL DEFAULT '{}'::jsonb;
         CREATE TABLE IF NOT EXISTS chess_games (
           code    TEXT PRIMARY KEY,
           data    JSONB NOT NULL,
@@ -352,9 +360,9 @@ function pgBackend(url, directUrl) {
       async save(user) {
         const played = Object.values(user.history || {}).reduce((a, h) => a + h.length, 0);
         await pool.query(
-          `UPDATE users SET password_hash=$2, last_seen=$3, best=$4, history=$5, games_played=$6 WHERE id=$1`,
+          `UPDATE users SET password_hash=$2, last_seen=$3, best=$4, history=$5, games_played=$6, ach=$7 WHERE id=$1`,
           [user.id, user.passwordHash, user.lastSeen,
-           JSON.stringify(user.best || {}), JSON.stringify(user.history || {}), played]
+           JSON.stringify(user.best || {}), JSON.stringify(user.history || {}), played, JSON.stringify(user.ach || {})]
         );
       },
       async touch(id, ts) {
@@ -363,6 +371,13 @@ function pgBackend(url, directUrl) {
       async leaderboard() {
         const { rows } = await pool.query('SELECT username, best FROM users');
         return rows.map((r) => ({ username: r.username, best: r.best || {} }));
+      },
+      async search(q, limit) {
+        const lower = q.toLowerCase().replace(/[^a-z0-9_]/g, '');   // usernames only use these
+        const { rows } = await pool.query(
+          `SELECT * FROM users WHERE username_lower LIKE $1
+           ORDER BY (username_lower LIKE $2) DESC, last_seen DESC LIMIT $3`, ['%' + lower + '%', lower + '%', limit]);
+        return rows.map(rowToUser);
       },
       async counts(dayAgo, recentAgo) {
         const { rows } = await pool.query(

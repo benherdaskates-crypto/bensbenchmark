@@ -897,3 +897,24 @@ textarea.input { resize: vertical; min-height: 110px; }
 .gcard-title .game-glyph { width: 40px; height: 40px; }
 .gcard:hover .glogo { transform: rotate(-6deg) scale(1.08); }
 .glogo { transition: transform .35s var(--spring); }
+
+/* ---------- Achievement and invite pop-ups ---------- */
+.ach-pop, .invite-pop { position: fixed; left: 50%; bottom: 24px; z-index: 9998; display: flex; align-items: center; gap: 14px;
+  width: min(92vw, 420px); padding: 14px 16px; border-radius: 18px; cursor: pointer;
+  background: color-mix(in srgb, var(--surface) 92%, var(--tc, var(--pop)));
+  border: 1px solid color-mix(in srgb, var(--tc, var(--pop)) 70%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tc, var(--pop)) 18%, transparent), 0 24px 60px rgba(0,0,0,.45);
+  transform: translateX(-50%); animation: achIn .7s cubic-bezier(.2,1.5,.4,1) both; }
+.invite-pop { --tc: var(--pop); cursor: default; bottom: auto; top: 84px; }
+.ach-pop.out, .invite-pop.out { animation: achOut .45s ease-in forwards; }
+@keyframes achIn { from { opacity: 0; transform: translate(-50%, 40px) scale(.8); } }
+@keyframes achOut { to { opacity: 0; transform: translate(-50%, 30px) scale(.9); } }
+.ach-medal { position: relative; width: 52px; height: 52px; flex: none; animation: achSpin 1s cubic-bezier(.2,1.4,.4,1) both; }
+.ach-medal .glogo, .ach-medal svg { width: 100%; height: 100%; }
+.ach-pop .ach-medal::after { content: ""; position: absolute; inset: -5px; border-radius: 16px; border: 3px solid var(--tc); opacity: .8; }
+@keyframes achSpin { from { transform: rotateY(180deg) scale(.4); } }
+.ach-check { position: absolute; right: -6px; bottom: -6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  background: #2fa35a; color: #fff; font: 900 .8rem/1 var(--font-display); border: 2px solid #fff; z-index: 2; }
+.ach-k { font-size: .66rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--tc, var(--pop)); }
+.ach-n { font-family: var(--font-display); font-weight: 800; font-size: 1.12rem; line-height: 1.15; margin-top: 2px; }
+.ach-d { font-size: .82rem; color: var(--text-2); margin-top: 1px; }

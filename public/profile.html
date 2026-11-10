@@ -71,19 +71,63 @@
 <main>
   <section class="section" id="content" style="padding-top:36px">
     <div class="wrap">
-      <div class="empty">Loading your profile…</div>
+      <div class="empty">Loading the profile…</div>
     </div>
   </section>
 </main>
 
+<style>
+  .pf-search { position: relative; max-width: 520px; }
+  .pf-search input { padding-left: 42px; }
+  .pf-search svg.ic { position: absolute; left: 14px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--muted); }
+  .pf-results { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 50; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; animation: chFadeIn .2s ease both; }
+  @keyframes chFadeIn { from { opacity: 0; transform: translateY(-4px); } }
+  .pf-results a { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .pf-results a:last-child { border-bottom: 0; }
+  .pf-results a:hover, .pf-results a.on { background: var(--surface-2); }
+  .pf-results .nm { font-weight: 700; }
+  .pf-results .meta { font-size: .78rem; color: var(--muted); }
+  .pf-av { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; flex: none; color: #fff;
+    font: 800 1.5rem/1 var(--font-display); background: linear-gradient(135deg, var(--tile, #5a7dd4), color-mix(in srgb, var(--tile, #5a7dd4) 55%, #000)); box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+  .pf-av.sm { width: 36px; height: 36px; border-radius: 11px; font-size: .9rem; box-shadow: none; }
+  .ach-group { margin-top: 18px; }
+  .ach-group h3 { display: flex; align-items: center; gap: 10px; font-size: 1rem; margin-bottom: 10px; }
+  .ach-group h3 .glogo { width: 28px; height: 28px; }
+  .ach-group h3 .cnt { margin-left: auto; font-size: .78rem; color: var(--muted); font-weight: 600; }
+  .ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .ach { position: relative; display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border);
+    animation: chFadeIn .4s ease both; }
+  .ach .md { width: 38px; height: 38px; flex: none; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 900 .95rem/1 var(--font-display);
+    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--tc) 70%, #fff), var(--tc) 60%, color-mix(in srgb, var(--tc) 60%, #000));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tc) 30%, transparent), 0 6px 14px color-mix(in srgb, var(--tc) 35%, transparent); }
+  .ach .n { font-weight: 700; font-size: .9rem; line-height: 1.2; }
+  .ach .d { font-size: .76rem; color: var(--muted); }
+  .ach.got { border-color: color-mix(in srgb, var(--tc) 45%, var(--border)); background: color-mix(in srgb, var(--tc) 7%, var(--surface)); }
+  .ach.lock { opacity: .55; }
+  .ach.lock .md { background: var(--surface-3); box-shadow: none; color: var(--muted); }
+  .ach-bar { height: 8px; border-radius: 9px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+  .ach-bar i { display: block; height: 100%; border-radius: 9px; background: linear-gradient(90deg, #c27c3e, #e0b030, #b06cf0); transition: width 1.2s var(--ease); }
+  .pf-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .vs-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .vs-pick button { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; text-align: left; font: inherit; color: var(--text); }
+  .vs-pick button:hover { border-color: var(--border-mid); transform: translateY(-2px); }
+  .vs-pick .glogo { width: 32px; height: 32px; }
+</style>
+
 <script src="/js/app.js"></script>
+<script src="/js/achievements.js"></script>
 <script>
 (function () {
   var content = document.getElementById('content');
+  var P = new URLSearchParams(location.search);
+  var other = (P.get('u') || '').replace(/^@/, '');
+  var A = window.BBACH;
+  var esc = BB.esc;
+  var COLORS = ['#5a7dd4', '#4f9a52', '#d9523d', '#7b6cd9', '#c9962a', '#2f8fd6', '#b0357f', '#159b9b'];
+  var colorFor = function (n) { var h = 0; for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return COLORS[h % COLORS.length]; };
 
-  function fmtDate(t) {
-    return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  }
+  function fmtDate(t) { return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); }
   function fmtAgo(t) {
     var s = Math.floor((Date.now() - t) / 1000);
     if (s < 60) return 'just now';
@@ -93,84 +137,153 @@
     return fmtDate(t);
   }
 
-  function render(user) {
+  /* ---------- search for other players ---------- */
+  function searchBox() {
+    return '<div class="pf-search reveal"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>' +
+      '<input class="input" id="find" placeholder="Find a player, ex. @username" autocomplete="off" spellcheck="false" aria-label="Find a player">' +
+      '<div id="found"></div></div>';
+  }
+  function wireSearch() {
+    var input = document.getElementById('find'), out = document.getElementById('found'), t = 0, pick = -1;
+    function close() { out.innerHTML = ''; pick = -1; }
+    input.addEventListener('input', function () {
+      clearTimeout(t);
+      var q = input.value.trim().replace(/^@/, '');
+      if (!q) return close();
+      t = setTimeout(async function () {
+        var d; try { d = await BB.api('/api/users?q=' + encodeURIComponent(q)); } catch (e) { return; }
+        if (input.value.trim().replace(/^@/, '') !== q) return;
+        out.innerHTML = '<div class="pf-results">' + (d.users.length ? d.users.map(function (u) {
+          return '<a href="/profile?u=' + encodeURIComponent(u.username) + '"><span class="pf-av sm" style="--tile:' + colorFor(u.username) + '">' + esc(u.username[0].toUpperCase()) + '</span>' +
+            '<span style="min-width:0"><span class="nm">@' + esc(u.username) + '</span><br><span class="meta">' + u.achievements + ' achievements · ' + u.rounds + ' rounds · seen ' + fmtAgo(u.lastSeen || u.created) + '</span></span></a>';
+        }).join('') : '<div class="empty" style="padding:14px">Nobody by that name yet.</div>') + '</div>';
+      }, 180);
+    });
+    input.addEventListener('keydown', function (e) {
+      var links = out.querySelectorAll('a');
+      if (!links.length) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault(); pick = (pick + (e.key === 'ArrowDown' ? 1 : -1) + links.length) % links.length;
+        links.forEach(function (l, i) { l.classList.toggle('on', i === pick); });
+      } else if (e.key === 'Enter') { location.href = (links[pick] || links[0]).href; }
+    });
+    document.addEventListener('click', function (e) { if (!e.target.closest('.pf-search')) close(); });
+  }
+
+  /* ---------- achievements ---------- */
+  function achievementsHtml(unlocked, chessBeaten) {
+    var total = A.LIST.length, got = A.LIST.filter(function (a) { return unlocked[a.id]; }).length;
+    var groups = [''].concat(Object.keys(BB.GAMES));
+    return '<div class="section-head mt-4 reveal" id="achievements"><div><div class="kicker">Achievements</div><h2>' + got + ' of ' + total + ' unlocked</h2></div></div>' +
+      '<div class="ach-bar reveal" style="max-width:520px"><i id="ach-fill" style="width:0"></i></div>' +
+      groups.map(function (gk) {
+        var list = A.LIST.filter(function (a) { return a.game === gk; });
+        if (!list.length) return '';
+        var g = BB.GAMES[gk], n = list.filter(function (a) { return unlocked[a.id]; }).length;
+        return '<div class="ach-group reveal"><h3>' + (g ? g.glyph + g.name : '<span class="glogo" style="display:grid;place-items:center">' + BB.ICON.trophy + '</span>Milestones') +
+          '<span class="cnt">' + n + ' / ' + list.length + '</span></h3><div class="ach-grid">' +
+          list.map(function (a, i) {
+            var t = A.TIERS[a.tier], when = unlocked[a.id];
+            var mark = a.game === 'chess' ? '✓' : { bronze: '3', silver: '2', gold: '1', legend: '★' }[a.tier];
+            return '<div class="ach ' + (when ? 'got' : 'lock') + '" style="--tc:' + t.color + ';animation-delay:' + i * 30 + 'ms" title="' + (when ? 'Unlocked ' + fmtDate(when) : 'Locked') + '">' +
+              '<span class="md">' + (when ? mark : '🔒') + '</span><span><span class="n">' + a.name + '</span><br><span class="d">' + a.desc + ' · ' + t.name + '</span></span></div>';
+          }).join('') + '</div></div>';
+      }).join('');
+  }
+
+  /* ---------- one profile, yours or someone else's ---------- */
+  function render(u, mine) {
     var keys = Object.keys(BB.GAMES);
-    var played = keys.filter(function (k) { return user.best[k] !== undefined; });
-    var totalRounds = keys.reduce(function (a, k) { return a + ((user.history[k] || []).length); }, 0);
-
-    content.innerHTML =
-      '<div class="wrap">' +
-        '<div class="row reveal" style="gap:18px;align-items:center">' +
-          '<div class="avatar">' + user.username.slice(0, 2).toUpperCase() + '</div>' +
-          '<div style="flex:1;min-width:200px">' +
-            '<h1 style="font-family:var(--font-display);font-weight:600;font-size:clamp(1.6rem,4vw,2.2rem)">' + user.username + '</h1>' +
-            '<p class="muted" style="font-size:.9rem">Playing since ' + fmtDate(user.created) + ' · ' + played.length + ' of ' + keys.length + ' games tried</p>' +
-          '</div>' +
-          '<button class="btn btn-ghost btn-sm" id="logout">Sign out</button>' +
-        '</div>' +
-
-        '<div class="stat-strip mt-3 reveal reveal-scale">' +
-          '<div class="stat-cell"><div class="stat-num" id="n-rounds">0</div><div class="stat-label">Rounds played</div></div>' +
-          '<div class="stat-cell"><div class="stat-num" id="n-games">0</div><div class="stat-label">Games tried</div></div>' +
-          '<div class="stat-cell"><div class="stat-num" id="n-records">0</div><div class="stat-label">Personal bests</div></div>' +
-        '</div>' +
-
-        '<div class="section-head mt-4 reveal"><div><div class="kicker">Personal bests</div><h2>Your scores</h2></div></div>' +
-        (played.length
-          ? '<div class="best-grid" data-stagger="55">' + played.map(function (k) {
-              var g = BB.GAMES[k];
-              var hist = (user.history[k] || []);
-              var recent = hist.slice(-16);
-              var max = Math.max.apply(null, recent.map(function (h) { return h.s; }).concat([1]));
-              return '<a class="best-card reveal" style="--tile:' + g.color + '" href="' + g.href + '">' +
-                '<div class="top"><span>' + g.glyph + '</span><span>' + g.name + '</span></div>' +
-                '<div class="val">' + g.fmt(user.best[k]) + '</div>' +
-                '<div class="plays">' + hist.length + ' round' + (hist.length === 1 ? '' : 's') + '</div>' +
-                '<div class="spark">' + recent.map(function (h) {
-                  return '<i style="height:' + Math.max(8, (h.s / max) * 100) + '%"></i>';
-                }).join('') + '</div></a>';
-            }).join('') + '</div>'
-          : '<div class="card empty reveal">No scores yet. <a href="/games" style="text-decoration:underline">Pick a game</a>.</div>') +
-
-        '<div class="section-head mt-4 reveal"><div><div class="kicker">Security</div><h2>Remembered devices</h2>' +
-        '<p>Remove any you do not recognise.</p></div></div>' +
+    var played = keys.filter(function (k) { return u.best[k] !== undefined; });
+    var unlocked = u.unlocked || {};
+    var got = Object.keys(unlocked).length;
+    document.title = (mine ? 'Your profile' : '@' + u.username) + ' | BensBenchmark';
+    content.innerHTML = '<div class="wrap">' + searchBox() +
+      '<div class="row reveal mt-4" style="gap:18px;align-items:center">' +
+        '<div class="pf-av" style="--tile:' + colorFor(u.username) + '">' + esc(u.username.slice(0, 2).toUpperCase()) + '</div>' +
+        '<div style="flex:1;min-width:200px"><h1 style="font-family:var(--font-display);font-weight:700;font-size:clamp(1.6rem,4vw,2.3rem)">@' + esc(u.username) + '</h1>' +
+        '<p class="muted" style="font-size:.9rem">Playing since ' + fmtDate(u.created) + (u.lastSeen && !mine ? ' · seen ' + fmtAgo(u.lastSeen) : '') + '</p></div>' +
+        (mine ? '<button class="btn btn-ghost btn-sm" id="logout">Sign out</button>'
+              : (BB.user ? '<button class="btn" id="challenge"><span>Challenge @' + esc(u.username) + '</span></button>' : '<a class="btn btn-ghost" href="/login?next=' + encodeURIComponent(location.pathname + location.search) + '">Sign in to challenge</a>')) +
+      '</div>' +
+      '<div class="stat-strip mt-3 reveal reveal-scale">' +
+        '<div class="stat-cell"><div class="stat-num" id="n-rounds">0</div><div class="stat-label">Rounds played</div></div>' +
+        '<div class="stat-cell"><div class="stat-num" id="n-ach">0</div><div class="stat-label">Achievements</div></div>' +
+        '<div class="stat-cell"><div class="stat-num" id="n-records">0</div><div class="stat-label">Personal bests</div></div>' +
+      '</div>' +
+      '<div class="section-head mt-4 reveal"><div><div class="kicker">Personal bests</div><h2>' + (mine ? 'Your scores' : 'Their scores') + '</h2></div></div>' +
+      (played.length
+        ? '<div class="best-grid">' + played.map(function (k) {
+            var g = BB.GAMES[k];
+            return '<a class="best-card reveal" style="--tile:' + g.color + '" href="/g/' + k + '">' +
+              '<div class="top"><span class="game-glyph" style="width:28px;height:28px">' + g.glyph + '</span><span>' + g.name + '</span></div>' +
+              '<div class="val">' + g.fmt(u.best[k]) + '</div></a>';
+          }).join('') + '</div>'
+        : '<div class="card empty reveal">No scores yet.' + (mine ? ' <a href="/#games" style="text-decoration:underline">Pick a game</a>.' : '') + '</div>') +
+      achievementsHtml(unlocked, u.chess || []) +
+      (mine ? '<div class="section-head mt-4 reveal"><div><div class="kicker">Security</div><h2>Remembered devices</h2><p>Remove any you do not recognise.</p></div></div>' +
         '<div class="card reveal" id="devices"><div class="empty">Loading devices…</div></div>' +
-
         '<div class="section-head mt-4 reveal"><div><h2>Change password</h2></div></div>' +
-        '<div class="card reveal" style="max-width:420px">' +
-          '<form id="pw-form"><div id="pw-msg"></div>' +
+        '<div class="card reveal" style="max-width:420px"><form id="pw-form"><div id="pw-msg"></div>' +
           '<div class="field"><label for="cur">Current password</label><input class="input" id="cur" type="password" required autocomplete="current-password"></div>' +
           '<div class="field"><label for="nxt">New password</label><input class="input" id="nxt" type="password" required minlength="4" autocomplete="new-password"></div>' +
-          '<button class="btn btn-block" type="submit">Update password</button></form>' +
-        '</div>' +
+          '<button class="btn btn-block" type="submit">Update password</button></form></div>' : '') +
       '</div>';
 
-    BB.countUp(document.getElementById('n-rounds'), totalRounds);
-    BB.countUp(document.getElementById('n-games'), played.length);
+    BB.countUp(document.getElementById('n-rounds'), u.rounds || 0);
+    BB.countUp(document.getElementById('n-ach'), got);
     BB.countUp(document.getElementById('n-records'), played.length);
     BB.initReveal();
+    setTimeout(function () { var f = document.getElementById('ach-fill'); if (f) f.style.width = Math.round(got / A.LIST.length * 100) + '%'; }, 300);
+    if (location.hash === '#achievements') setTimeout(function () { document.getElementById('achievements').scrollIntoView({ behavior: 'smooth' }); }, 400);
+    wireSearch();
 
-    document.getElementById('logout').addEventListener('click', async function () {
-      await BB.logout();
-      location.href = '/';
+    if (mine) {
+      document.getElementById('logout').addEventListener('click', async function () { await BB.logout(); location.href = '/'; });
+      document.getElementById('pw-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var box = document.getElementById('pw-msg');
+        try {
+          await BB.api('/api/change-password', { method: 'POST', body: JSON.stringify({ current: document.getElementById('cur').value, next: document.getElementById('nxt').value }) });
+          box.innerHTML = '<div class="notice notice-good">Password updated.</div>'; e.target.reset();
+        } catch (err) { box.innerHTML = '<div class="notice notice-bad">' + esc(err.message) + '</div>'; }
+      });
+      loadDevices();
+    } else {
+      var c = document.getElementById('challenge');
+      if (c) c.addEventListener('click', function () { challenge(u.username); });
+    }
+  }
+
+  /* ---------- challenge another player ---------- */
+  var GAMES_TO_PLAY = ['chess', 'wordle', 'brillion', 'pricedle', 'greens', 'typing', 'aim', 'reaction'];
+  function challenge(name) {
+    var m = BB.modal('<button class="modal-close" data-close aria-label="Close">' + BB.ICON.x + '</button>' +
+      '<h2>Challenge @' + esc(name) + '</h2><p class="sub">Pick a game. They get an invite, and you go straight to the room.</p>' +
+      '<div class="vs-pick mt-3">' + GAMES_TO_PLAY.map(function (k) {
+        var g = BB.GAMES[k]; return '<button data-g="' + k + '">' + g.glyph + '<b>' + g.name + '</b></button>';
+      }).join('') + '</div>', { wide: true });
+    m.el.querySelectorAll('[data-g]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        var game = b.getAttribute('data-g'), me = BB.user.username;
+        b.disabled = true;
+        try {
+          var code, href;
+          if (game === 'chess') {
+            var r = await BB.api('/api/chess', { method: 'POST', body: JSON.stringify({ color: 'random', name: me }) });
+            try { sessionStorage.setItem('bb_chess_seat', JSON.stringify({ code: r.code, pid: r.pid })); } catch (e) {}
+            code = r.code; href = '/games/chess?mode=online&code=' + code;
+          } else {
+            var room = await BB.api('/api/rooms', { method: 'POST', body: JSON.stringify({ name: me, game: game }) });
+            BB.lsSet('bb_room', { code: room.code, pid: room.playerId });
+            code = room.code; href = '/play?code=' + code;
+          }
+          await BB.api('/api/invites', { method: 'POST', body: JSON.stringify({ to: name, game: game, code: code }) });
+          BB.toast('Invite sent to @' + name);
+          setTimeout(function () { location.href = href; }, 500);
+        } catch (e) { BB.toast(e.message || 'Could not send the invite'); b.disabled = false; }
+      });
     });
-
-    document.getElementById('pw-form').addEventListener('submit', async function (e) {
-      e.preventDefault();
-      var box = document.getElementById('pw-msg');
-      try {
-        await BB.api('/api/change-password', {
-          method: 'POST',
-          body: JSON.stringify({ current: document.getElementById('cur').value, next: document.getElementById('nxt').value })
-        });
-        box.innerHTML = '<div class="notice notice-good">Password updated.</div>';
-        e.target.reset();
-      } catch (err) {
-        box.innerHTML = '<div class="notice notice-bad">' + err.message + '</div>';
-      }
-    });
-
-    loadDevices();
   }
 
   async function loadDevices() {
@@ -178,7 +291,7 @@
     try {
       var d = await BB.api('/api/devices');
       box.innerHTML = d.devices.sort(function (a, b) { return b.lastSeen - a.lastSeen; }).map(function (v) {
-        return '<div class="device-row"><div class="info"><b>' + v.device + '</b>' +
+        return '<div class="device-row"><div class="info"><b>' + esc(v.device) + '</b>' +
           '<span>Signed in ' + fmtDate(v.created) + ' · last used ' + fmtAgo(v.lastSeen) + '</span></div>' +
           (v.current ? '<span class="pill-now">This device</span>' : '') +
           '<button class="btn btn-ghost btn-sm" data-remove="' + v.id + '">Remove</button></div>';
@@ -193,14 +306,23 @@
           loadDevices();
         });
       });
-    } catch (e) {
-      box.innerHTML = '<div class="empty">Could not load devices.</div>';
-    }
+    } catch (e) { box.innerHTML = '<div class="empty">Could not load devices.</div>'; }
   }
 
-  BB.init({ active: 'profile' }).then(function (user) {
+  BB.init({ active: 'profile' }).then(async function (user) {
+    if (other && (!user || other.toLowerCase() !== user.username.toLowerCase())) {
+      try {
+        var d = await BB.api('/api/users/' + encodeURIComponent(other));
+        return render(d.user, false);
+      } catch (e) {
+        content.innerHTML = '<div class="wrap">' + searchBox() + '<div class="card empty mt-4">No player called @' + esc(other) + '.</div></div>';
+        return wireSearch();
+      }
+    }
     if (!user) return location.replace('/login?next=/profile');
-    render(user);
+    var ach = user.ach || { unlocked: {} };
+    try { ach = (await BB.api('/api/achievements/check', { method: 'POST', body: JSON.stringify({ local: BB.lsGet('bb_ach', {}) }) })).ach; } catch (e) {}
+    render({ username: user.username, created: user.created, best: user.best || {}, unlocked: ach.unlocked || {}, rounds: ach.rounds || 0, chess: ach.chess || [] }, true);
   });
 })();
 </script>

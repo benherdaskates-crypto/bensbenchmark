@@ -352,13 +352,87 @@
   };
   BB.submitScore = async function (game, score, meta) {
     const localNew = BB.setLocalBest(game, score);
+    localAchievements(game, score);
     if (!BB.user) return { newBest: localNew, saved: false };
     try {
       const d = await api('/api/score', { method: 'POST', body: JSON.stringify({ game, score, meta }) });
       if (BB.user.best) BB.user.best[game] = d.best;
-      return { newBest: d.newBest, best: d.best, saved: true };
+      if (d.newAch && d.newAch.length) { markSeen(d.newAch); BB.celebrate(d.newAch); }
+      if (BB.user.ach && d.newAch) d.newAch.forEach((id) => { BB.user.ach.unlocked[id] = Date.now(); });
+      if (BB.user.ach && game === 'chess' && BB.user.ach.chess.indexOf(score) < 0) BB.user.ach.chess.push(score);
+      return { newBest: d.newBest, best: d.best, saved: true, newAch: d.newAch || [] };
     } catch (e) {
       return { newBest: localNew, saved: false };
+    }
+  };
+
+  /* ---------- Achievements ----------
+     The list lives in /js/achievements.js, shared with the server. Guests earn
+     them in this browser; signed-in players earn them on their account. */
+  let achReady = null;
+  BB.achievements = function () {
+    if (window.BBACH) return Promise.resolve(window.BBACH);
+    if (!achReady) achReady = new Promise((res) => {
+      const s = document.createElement('script');
+      s.src = '/js/achievements.js';
+      s.onload = () => res(window.BBACH);
+      s.onerror = () => res(null);
+      document.head.appendChild(s);
+    });
+    return achReady;
+  };
+  const seen = () => lsGet('bb_ach_seen', {});
+  function markSeen(ids) { const all = seen(); ids.forEach((id) => { all[id] = 1; }); lsSet('bb_ach_seen', all); }
+  // Every round counts locally too, so guests unlock things and nothing is shown twice.
+  async function localAchievements(game, score) {
+    const A = await BB.achievements();
+    if (!A) return;
+    const p = A.record(lsGet('bb_ach', {}), game, score);
+    const ids = A.evaluate({ best: lsGet('bb_best', {}), rounds: p.rounds, games: p.games, chess: p.chess });
+    const fresh = ids.filter((id) => !p.unlocked[id]);
+    fresh.forEach((id) => { p.unlocked[id] = Date.now(); });
+    lsSet('bb_ach', p);
+    if (!BB.user) {
+      const show = fresh.filter((id) => !seen()[id]);
+      if (show.length) { markSeen(show); BB.celebrate(show); }
+    }
+  }
+  // After signing in, fold this browser's progress into the account once per visit.
+  async function syncAchievements() {
+    if (!BB.user) return;
+    try { if (sessionStorage.getItem('bb_ach_sync')) return; sessionStorage.setItem('bb_ach_sync', '1'); } catch (e) {}
+    try {
+      const d = await api('/api/achievements/check', { method: 'POST', body: JSON.stringify({ local: lsGet('bb_ach', {}) }) });
+      BB.user.ach = d.ach;
+      const show = (d.newAch || []).filter((id) => !seen()[id]);
+      if (show.length) { markSeen(show); BB.celebrate(show); }
+    } catch (e) {}
+  }
+
+  // A gold-edged card slides up for each new achievement.
+  const queue = [];
+  let showing = false;
+  BB.celebrate = async function (ids) {
+    const A = await BB.achievements();
+    if (!A) return;
+    ids.forEach((id) => { if (A.BY_ID[id]) queue.push(A.BY_ID[id]); });
+    if (!showing) next();
+    function next() {
+      const a = queue.shift();
+      if (!a) { showing = false; return; }
+      showing = true;
+      const tier = A.TIERS[a.tier];
+      const g = BB.GAMES[a.game];
+      const el = document.createElement('div');
+      el.className = 'ach-pop';
+      el.style.setProperty('--tc', tier.color);
+      el.innerHTML = '<div class="ach-medal">' + (g ? g.glyph : ICON.trophy) + (a.game === 'chess' ? '<span class="ach-check">\u2713</span>' : '') + '</div>' +
+        '<div><div class="ach-k">Achievement unlocked \u00b7 ' + tier.name + '</div><div class="ach-n">' + a.name + '</div><div class="ach-d">' + a.desc + '</div></div>';
+      el.addEventListener('click', () => { location.href = '/profile#achievements'; });
+      document.body.appendChild(el);
+      if (BB.sfx && BB.sfx.good) BB.sfx.good();
+      if (BB.fx && BB.fx.confetti) setTimeout(() => BB.fx.confetti({ colors: [tier.color, '#ffffff', '#ffd23f'], count: a.tier === 'legend' ? 200 : 70 }), 250);
+      setTimeout(() => { el.classList.add('out'); setTimeout(() => { el.remove(); next(); }, 450); }, 3600);
     }
   };
   /* Streak games share one recorder so solo and friend rounds move the same number. */
@@ -603,9 +677,34 @@
       paintLive();
     } catch (e) {}
   }
+  /* ---------- Invites from other players ---------- */
+  async function checkInvites() {
+    if (!BB.user || document.hidden) return;
+    let list = [];
+    try { list = (await api('/api/invites')).invites || []; } catch (e) { return; }
+    const shown = lsGet('bb_inv_seen', {});
+    list.filter((i) => !shown[i.id]).slice(-2).forEach((i) => {
+      shown[i.id] = 1;
+      const g = BB.GAMES[i.game];
+      const href = i.game === 'chess' ? '/games/chess?mode=online&code=' + i.code : '/play?code=' + i.code;
+      const el = document.createElement('div');
+      el.className = 'invite-pop';
+      el.innerHTML = '<div class="ach-medal">' + (g ? g.glyph : ICON.users) + '</div><div style="flex:1;min-width:0"><div class="ach-k">Game invite</div>' +
+        '<div class="ach-n">@' + BB.esc(i.from) + '</div><div class="ach-d">wants to play ' + (g ? g.name : i.game) + ' with you</div></div>' +
+        '<div class="row" style="gap:6px"><a class="btn btn-sm" href="' + href + '"><span>Join</span></a><button class="btn btn-ghost btn-sm" type="button">Later</button></div>';
+      el.querySelector('button').addEventListener('click', () => { el.classList.add('out'); setTimeout(() => el.remove(), 400); });
+      document.body.appendChild(el);
+      if (BB.sfx && BB.sfx.select) BB.sfx.select();
+    });
+    lsSet('bb_inv_seen', shown);
+  }
+  BB.esc = BB.esc || ((s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
+
   function startLive() {
     BB.loadCommunity().then(ping);
     setInterval(ping, 60e3);
+    setTimeout(() => { syncAchievements(); checkInvites(); }, 1500);
+    setInterval(checkInvites, 45e3);
     setInterval(BB.loadCommunity, 120e3);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
   }
