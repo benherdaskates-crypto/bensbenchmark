@@ -21,8 +21,14 @@
 <meta name="description" content="Full chess against twelve computer opponents, ending with Ben, the final boss. Or play a friend online.">
 <link rel="canonical" href="https://www.bensbenchmark.top/games/chess">
 <style>
-  .ch-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: start; }
+  .ch-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
   @media (max-width: 860px) { .ch-layout { grid-template-columns: 1fr; } }
+  .ch-col { display: flex; flex-direction: column; gap: 10px; }
+  .ch-strip { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); min-height: 58px; }
+  .ch-strip .who { min-width: 0; }
+  .ch-strip .nm { font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ch-strip .tt { font-size: .76rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ch-strip .ch-caps { margin-left: auto; }
   .ch-boardwrap { position: relative; }
   .ch-board { position: relative; width: 100%; aspect-ratio: 1; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(8, minmax(0, 1fr));
     background: var(--dark); container-type: inline-size;
@@ -42,16 +48,15 @@
   .ch-sq .co { position: absolute; font-size: .62rem; font-weight: 700; opacity: .75; pointer-events: none; }
   .ch-sq .co.r { left: 4px; top: 3px; } .ch-sq .co.f { right: 4px; bottom: 2px; }
   .ch-sq.l .co { color: var(--dark); } .ch-sq.d .co { color: var(--light); }
-  .ch-pc { position: relative; z-index: 3; font-size: clamp(22px, 8.4vmin, 62px); font-size: 10cqw; line-height: 1; cursor: grab; transition: transform .12s;
-    font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'DejaVu Sans', serif; }
-  .ch-pc.w { color: #fff; text-shadow: 0 0 1px #000, 0 0 1px #000, 0 0 2px #000, 0 2px 4px rgba(0,0,0,.45); }
-  .ch-pc.b { color: #1a1a1d; text-shadow: 0 1px 0 rgba(255,255,255,.25), 0 2px 4px rgba(0,0,0,.35); }
-  .ch-pc.lift { cursor: grabbing; opacity: .35; }
-  .ch-drag { position: fixed; z-index: 9990; pointer-events: none; transform: translate(-50%, -55%) scale(1.15); filter: drop-shadow(0 10px 14px rgba(0,0,0,.45)); }
+  .ch-pc { position: relative; z-index: 3; width: 88%; height: 88%; transition: transform .12s; pointer-events: none; }
+  .ch-pc.lift { opacity: .3; }
+  .ch-sq:has(.ch-pc) { cursor: grab; }
+  .ch-drag { position: fixed; z-index: 9990; pointer-events: none; transform: translate(-50%, -55%) scale(1.12); filter: drop-shadow(0 12px 12px rgba(0,0,0,.45)); }
   .ch-side { display: flex; flex-direction: column; gap: 12px; }
   .ch-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
   .ch-player { display: flex; align-items: center; gap: 10px; }
-  .ch-av { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; color: #fff; flex: none; }
+  .ch-av { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; color: #fff; flex: none; overflow: hidden; }
+  .ch-av .cp { width: 78%; height: 78%; }
   .ch-player .nm { font-weight: 700; line-height: 1.15; }
   .ch-player .tt { font-size: .78rem; color: var(--muted); }
   .ch-turn { margin-left: auto; width: 10px; height: 10px; border-radius: 50%; background: var(--border-mid); transition: background .3s, box-shadow .3s; }
@@ -60,8 +65,11 @@
   .ch-think i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: chDot 1s infinite ease-in-out; }
   .ch-think i:nth-child(2) { animation-delay: .15s; } .ch-think i:nth-child(3) { animation-delay: .3s; }
   @keyframes chDot { 0%, 100% { transform: translateY(0); opacity: .4; } 50% { transform: translateY(-4px); opacity: 1; } }
-  .ch-caps { min-height: 22px; font-size: 1.05rem; letter-spacing: -2px; color: var(--muted); margin-top: 6px; font-family: 'Segoe UI Symbol', serif; }
-  .ch-caps b { letter-spacing: 0; font-family: var(--font); font-size: .78rem; margin-left: 6px; color: var(--text-2); }
+  .ch-caps { display: flex; align-items: center; min-height: 24px; flex-wrap: wrap; row-gap: 2px; }
+  .ch-caps .cg { display: flex; margin-right: 6px; }
+  .ch-caps .cg span { width: 22px; height: 22px; display: block; }
+  .ch-caps .cg span + span { margin-left: -9px; }
+  .ch-caps b { font-size: .78rem; color: var(--text-2); margin-left: 2px; font-variant-numeric: tabular-nums; }
   .ch-moves { max-height: 260px; overflow: auto; font-size: .86rem; font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 34px 1fr 1fr; gap: 2px 6px; }
   .ch-moves span { padding: 2px 6px; border-radius: 5px; }
   .ch-moves .n { color: var(--muted); padding-left: 0; }
@@ -80,7 +88,7 @@
   .ch-bot .ok { position: absolute; top: 8px; right: 10px; color: #6ad08a; font-weight: 800; }
   .ch-bot.boss { grid-column: 1 / -1; background: linear-gradient(120deg, #2a0d0d, #4a1414 50%, #2a0d0d); border-color: #d4a64a; color: #fff; padding: 16px; }
   .ch-bot.boss .lv { color: #f3d58f; }
-  .ch-bot.boss .ch-av { background: linear-gradient(135deg, #d4a64a, #8f3b3b); width: 52px; height: 52px; font-size: 1.4rem; }
+  .ch-bot.boss .ch-av { background: linear-gradient(135deg, #d4a64a, #8f3b3b); width: 52px; height: 52px; }
   .ch-bot.locked { cursor: not-allowed; filter: grayscale(.7); opacity: .7; }
   .ch-bot.locked:hover { transform: none; }
   .ch-colors { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -93,9 +101,10 @@
   .ch-over p { color: var(--text-2); margin-top: 4px; }
   .ch-promo { position: absolute; z-index: 25; display: flex; gap: 4px; padding: 6px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border);
     box-shadow: 0 12px 30px rgba(0,0,0,.4); left: 50%; top: 50%; transform: translate(-50%, -50%); animation: chIn .3s var(--spring) both; }
-  .ch-promo button { font-size: 44px; line-height: 1; width: 60px; height: 60px; border-radius: 10px; border: 0; background: var(--surface-2); cursor: pointer; }
+  .ch-promo button { width: 64px; height: 64px; padding: 6px; border-radius: 10px; border: 0; background: var(--surface-2); cursor: pointer; transition: transform .15s var(--spring), background .15s; }
+  .ch-promo button:hover { transform: translateY(-3px); }
   .ch-promo button:hover { background: var(--tile); }
-  .ch-fly { position: fixed; z-index: 9995; pointer-events: none; line-height: 1; font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', serif; }
+  .ch-fly { position: fixed; z-index: 9995; pointer-events: none; display: grid; place-items: center; }
   .ch-banner { position: absolute; left: -4%; right: -4%; top: 50%; z-index: 18; transform: translateY(-50%); text-align: center; pointer-events: none;
     font-family: var(--font-display); font-weight: 900; letter-spacing: .12em; font-size: clamp(2rem, 8cqw, 4.6rem); color: #fff;
     padding: .25em 0; background: linear-gradient(90deg, transparent, rgba(160, 20, 20, .92) 12%, rgba(160, 20, 20, .92) 88%, transparent);
@@ -105,7 +114,7 @@
   @keyframes chBanner { 0% { transform: translateY(-50%) scaleX(0) scaleY(2.2); opacity: 0; } 55% { transform: translateY(-50%) scaleX(1.06) scaleY(.92); opacity: 1; } 100% { transform: translateY(-50%) scale(1); opacity: 1; } }
   .ch-code { font-family: var(--font-display); font-weight: 800; font-size: 2.4rem; letter-spacing: .14em; }
   .ch-intro { text-align: center; }
-  .ch-intro .ch-av { margin: 0 auto 12px; width: 84px; height: 84px; font-size: 2.4rem; border-radius: 24px; background: linear-gradient(135deg, #d4a64a, #8f3b3b);
+  .ch-intro .ch-av { margin: 0 auto 12px; width: 84px; height: 84px; border-radius: 24px; background: linear-gradient(135deg, #d4a64a, #8f3b3b);
     animation: chBoss 2.4s ease-in-out infinite; }
   @keyframes chBoss { 0%, 100% { box-shadow: 0 0 0 0 rgba(212,166,74,.5); } 50% { box-shadow: 0 0 0 16px rgba(212,166,74,0); } }
 </style>
@@ -120,6 +129,7 @@
 <script src="/js/fx.js"></script>
 <script src="/js/game-shell.js"></script>
 <script src="/js/games/chess-engine.js"></script>
+<script src="/js/games/chess-pieces.js"></script>
 <script>
 (function () {
   'use strict';
@@ -127,7 +137,7 @@
   var P = new URLSearchParams(location.search);
   var MODE = P.get('mode') === 'online' ? 'online' : P.get('mode') === 'local' ? 'local' : 'bot';
   var BOTS = Chess.BOTS;
-  var GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+  // Every piece picture comes from one set: js/games/chess-pieces.js
   var COLORS = ['#6aaa64', '#4f8fd6', '#c9962a', '#7b6cd9', '#2fb3a1', '#d9523d', '#b0357f', '#3a8a4a', '#5a7dd4', '#c1662a', '#1f1f2e', '#8f3b3b'];
   var LINES = {
     start: ['Let us see what you have got.', 'I have been waiting a long time for this.', 'Every grandmaster lost to someone once. Not to you, though.'],
@@ -139,10 +149,15 @@
   var say = function (k) { var a = LINES[k]; return a[Math.floor(Math.random() * a.length)]; };
 
   var store = BB.lsGet('bb_chess', { beaten: [], wins: 0, played: 0 });
+  // The online seat lives in this tab only, so a friend in another tab gets their own seat and colour.
+  var seat = {
+    get: function () { try { return JSON.parse(sessionStorage.getItem('bb_chess_seat')); } catch (e) { return null; } },
+    set: function (v) { try { if (v) sessionStorage.setItem('bb_chess_seat', JSON.stringify(v)); else sessionStorage.removeItem('bb_chess_seat'); } catch (e) {} },
+  };
   var bossUnlocked = function () { return true; };   // every opponent, Ben included, is open to everyone
 
   var game = null, me = 'w', flipped = false, botLevel = 0, sel = -1, hints = [], busy = false, over = null, viewing = -1;
-  var worker = null, reqId = 0, online = null, autoFlip = BB.lsGet('bb_chess_autoflip', true);
+  var worker = null, reqId = 0, online = null;
   var mount = document.getElementById('mount');
 
   /* ---------------- screens ---------------- */
@@ -171,7 +186,7 @@
         '<div class="ch-ladder">' + BOTS.map(function (b, i) {
           var locked = b.boss && !bossUnlocked();
           return '<button class="ch-bot' + (b.boss ? ' boss' : '') + (locked ? ' locked' : '') + (b.level === pick ? ' on' : '') + '" data-bot="' + b.level + '" style="animation-delay:' + i * 40 + 'ms">' +
-            '<span class="ch-av" style="background:' + COLORS[i] + '">' + (b.boss ? '♚' : b.name[0]) + '</span>' +
+            '<span class="ch-av" style="background:' + COLORS[i] + '">' + (b.boss ? ChessPieces.svg('K') : b.name[0]) + '</span>' +
             '<span><span class="lv">' + (b.boss ? 'Final boss' : 'Level ' + b.level) + ' · ' + b.elo + '</span><br><b>' + b.name + '</b><br>' +
             '<span style="font-size:.8rem;opacity:.75">' + (locked ? 'Beat Level 9 or higher to unlock' : b.title) + '</span></span>' +
             (store.beaten.indexOf(b.level) > -1 ? '<span class="ok">✓</span>' : '') + '</button>';
@@ -204,7 +219,7 @@
   }
 
   function bossIntro(next) {
-    BB.modal('<div class="ch-intro"><div class="ch-av">♚</div><div class="kicker">Final boss</div>' +
+    BB.modal('<div class="ch-intro"><div class="ch-av">' + ChessPieces.svg('K') + '</div><div class="kicker">Final boss</div>' +
       '<h2 style="margin-top:4px">Ben</h2><p class="sub">Opening book, deep search, no mercy. He has been waiting for you.</p>' +
       '<p class="mt-2" style="font-style:italic">"' + say('start') + '"</p>' +
       '<button class="btn btn-block mt-3" data-close id="fight"><span>Play Ben</span></button></div>');
@@ -226,7 +241,6 @@
   function newLocalGame(moves) {
     botLevel = 0; me = 'w'; flipped = false; over = null; sel = -1; viewing = -1;
     game = Chess.replay(moves || []);
-    if (autoFlip) flipped = game.t === 'b';
     BB.lsSet('bb_chess_local', { moves: game.moves.map(function (m) { return m.uci; }) });
     boardScreen();
   }
@@ -239,16 +253,16 @@
   function opponent() {
     if (MODE === 'bot') {
       var b = BOTS[botLevel - 1];
-      return { name: b.name, title: b.boss ? 'The final boss' : 'Level ' + b.level + ' · ' + b.elo, av: b.boss ? '♚' : b.name[0], color: COLORS[botLevel - 1], boss: b.boss };
+      return { name: b.name, title: b.boss ? 'The final boss' : 'Level ' + b.level + ' · ' + b.elo, av: b.boss ? ChessPieces.svg('K') : b.name[0], color: COLORS[botLevel - 1], boss: b.boss };
     }
     if (MODE === 'online' && online && online.view) {
       var seat = me === 'w' ? online.view.black : online.view.white;
-      return { name: seat ? seat.name : 'Waiting for a friend', title: seat ? (seat.on ? 'Connected' : 'Reconnecting...') : 'Send them the code', av: seat ? seat.name[0] : '?', color: '#5a7dd4' };
+      return { name: seat ? seat.name : 'Waiting for a friend', title: seat ? (seat.on ? 'Playing ' + (me === 'w' ? 'black' : 'white') + ' · connected' : 'Reconnecting...') : 'Send them the code', av: seat ? BB.esc(seat.name[0].toUpperCase()) : '?', color: '#5a7dd4' };
     }
-    return { name: 'Black', title: 'Pass and play', av: '♟', color: '#1f1f2e' };
+    return { name: 'Black', title: 'Pass and play', av: ChessPieces.svg('p'), color: '#d8d8dc' };
   }
   function self() {
-    if (MODE === 'local') return { name: 'White', title: 'Pass and play', av: '♙', color: '#d8d8d8' };
+    if (MODE === 'local') return { name: 'White', title: 'Pass and play', av: ChessPieces.svg('P'), color: '#2b2b30' };
     var name = BB.user ? '@' + BB.user.username : 'You';
     return { name: name, title: me === 'w' ? 'Playing white' : 'Playing black', av: name.replace('@', '')[0].toUpperCase(), color: 'var(--tile)' };
   }
@@ -261,13 +275,15 @@
     var opp = opponent();
     mount.innerHTML = head(actions) +
       '<div class="ch-layout">' +
-        '<div class="ch-boardwrap"><div class="ch-board' + (opp.boss ? ' boss' : '') + '" id="board" aria-label="Chess board"></div></div>' +
+        '<div class="ch-col">' +
+          '<div class="ch-strip" id="opp"></div>' +
+          '<div class="ch-boardwrap"><div class="ch-board' + (opp.boss ? ' boss' : '') + '" id="board" aria-label="Chess board"></div></div>' +
+          '<div class="ch-strip" id="mine"></div>' +
+        '</div>' +
         '<div class="ch-side">' +
-          '<div class="ch-card" id="opp"></div>' +
           '<div class="ch-card"><div class="ch-status" id="status"></div><div id="say"></div></div>' +
-          '<div class="ch-card"><div class="ch-moves" id="moves"></div></div>' +
+          '<div class="ch-card"><div class="kicker" style="margin-bottom:6px">Moves</div><div class="ch-moves" id="moves"></div></div>' +
           '<div class="ch-card ch-btns" id="tools"></div>' +
-          '<div class="ch-card" id="mine"></div>' +
         '</div>' +
       '</div>';
     var nb = document.getElementById('b-new');
@@ -286,15 +302,11 @@
     var html = '';
     if (MODE === 'bot') html += '<button class="btn btn-ghost btn-sm" id="t-undo"><span>Undo</span></button>' +
       (botLevel < 12 ? '<button class="btn btn-ghost btn-sm" id="t-hint"><span>Hint</span></button>' : '');
-    html += '<button class="btn btn-ghost btn-sm" id="t-flip"><span>Flip</span></button>';
-    if (MODE === 'local') html += '<button class="btn btn-ghost btn-sm" id="t-auto"><span>Auto flip: ' + (autoFlip ? 'on' : 'off') + '</span></button>' +
-      '<button class="btn btn-ghost btn-sm" id="t-undo"><span>Undo</span></button>';
+    if (MODE === 'local') html += '<button class="btn btn-ghost btn-sm" id="t-undo"><span>Undo</span></button>';
     if (MODE !== 'local') html += '<button class="btn btn-ghost btn-sm" id="t-resign"><span>Resign</span></button>';
     if (MODE === 'online') html += '<button class="btn btn-ghost btn-sm" id="t-draw"><span>Offer draw</span></button>';
     t.innerHTML = html;
     var on = function (id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
-    on('t-flip', function () { flipped = !flipped; render(); });
-    on('t-auto', function () { autoFlip = !autoFlip; BB.lsSet('bb_chess_autoflip', autoFlip); tools(); });
     on('t-undo', undo);
     on('t-hint', hint);
     on('t-resign', function () {
@@ -313,9 +325,10 @@
   function playerCard(p, color) {
     var turn = !over && game.t === color;
     var thinking = turn && busy && MODE === 'bot' && color !== me;
-    return '<div class="ch-player"><span class="ch-av" style="background:' + p.color + '">' + p.av + '</span>' +
-      '<div><div class="nm">' + BB.esc(p.name) + (thinking ? '<span class="ch-think"><i></i><i></i><i></i></span>' : '') + '</div><div class="tt">' + BB.esc(p.title) + '</div></div>' +
-      '<span class="ch-turn' + (turn ? ' on' : '') + '"></span></div>' + '<div class="ch-caps">' + captured(color) + '</div>';
+    return '<span class="ch-av" style="background:' + p.color + '">' + p.av + '</span>' +
+      '<div class="who"><div class="nm">' + BB.esc(p.name) + (thinking ? '<span class="ch-think"><i></i><i></i><i></i></span>' : '') + '</div><div class="tt">' + BB.esc(p.title) + '</div></div>' +
+      '<div class="ch-caps">' + captured(color) + '</div>' +
+      '<span class="ch-turn' + (turn ? ' on' : '') + '" title="' + (turn ? 'To move' : '') + '"></span>';
   }
 
   // Pieces this colour has taken, and the material lead.
@@ -324,8 +337,10 @@
     game.b.forEach(function (p) { if (p) { var c = Chess.colorOf(p), l = p.toLowerCase(); now[c][l] = (now[c][l] || 0) + 1; } });
     var them = color === 'w' ? 'b' : 'w', out = '', val = { p: 1, n: 3, b: 3, r: 5, q: 9 }, mine = 0, theirs = 0;
     ['q', 'r', 'b', 'n', 'p'].forEach(function (l) {
-      var gone = Math.max(0, start[l] - (now[them][l] || 0));
-      for (var i = 0; i < gone; i++) out += GLYPH[l];
+      var gone = Math.max(0, start[l] - (now[them][l] || 0)), group = '';
+      var piece = them === 'w' ? l.toUpperCase() : l;
+      for (var i = 0; i < gone; i++) group += '<span>' + ChessPieces.svg(piece) + '</span>';
+      if (group) out += '<span class="cg">' + group + '</span>';
       mine += (now[color][l] || 0) * val[l]; theirs += (now[them][l] || 0) * val[l];
     });
     return out + (mine > theirs ? '<b>+' + (mine - theirs) + '</b>' : '');
@@ -351,7 +366,7 @@
       if ((i & 7) === 0) co += '<span class="co r">' + (8 - r) + '</span>';
       if (i >= 56) co += '<span class="co f">' + 'abcdefgh'[f] + '</span>';
       html += '<div class="' + cls + '" data-sq="' + sq + '">' + co +
-        (p ? '<span class="ch-pc ' + Chess.colorOf(p) + '" data-pc="' + sq + '">' + GLYPH[p.toLowerCase()] + '</span>' : '') + '</div>';
+        (p ? '<div class="ch-pc ' + Chess.colorOf(p) + '" data-pc="' + sq + '">' + ChessPieces.svg(p) + '</div>' : '') + '</div>';
     }
     board.innerHTML = html;
     if (anim) slide(anim);
@@ -379,7 +394,8 @@
     if (MODE === 'online' && online && online.view && (!online.view.white || !online.view.black)) { el.textContent = 'Waiting for your friend to join'; return; }
     var who = game.t === 'w' ? 'White' : 'Black';
     if (MODE === 'local') el.textContent = who + ' to move' + (st.check ? ', in check' : '');
-    else el.textContent = (game.t === me ? 'Your move' : (MODE === 'bot' ? opponent().name + ' is thinking' : 'Their move')) + (st.check ? ' · check' : '');
+    else el.textContent = (MODE === 'online' ? 'You are ' + (me === 'w' ? 'white' : 'black') + ' · ' : '') +
+      (game.t === me ? 'Your move' : (MODE === 'bot' ? opponent().name + ' is thinking' : 'Their move')) + (st.check ? ' · check' : '');
   }
 
   // Slide the piece that moved from its old square.
@@ -426,9 +442,9 @@
     if (!drag.ghost && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 5) {
       drag.ghost = drag.pc.cloneNode(true);
       drag.ghost.classList.add('ch-drag');
-      // the board may be scaled up with the page; the dragged copy lives outside it
-      var zoom = parseFloat(document.getElementById('mount').style.zoom) || 1;
-      drag.ghost.style.fontSize = (parseFloat(getComputedStyle(drag.pc).fontSize) || 48) * zoom + 'px';
+      // Same size as a piece on screen (the board may be scaled with the page).
+      var size = drag.pc.parentNode.getBoundingClientRect().width * 0.88;
+      drag.ghost.style.width = size + 'px'; drag.ghost.style.height = size + 'px';
       document.body.appendChild(drag.ghost);
       drag.pc.classList.add('lift');
     }
@@ -479,7 +495,7 @@
     var box = document.createElement('div');
     box.className = 'ch-promo';
     box.innerHTML = ['q', 'r', 'b', 'n'].map(function (l) {
-      return '<button data-p="' + l + '" class="ch-pc ' + game.t + '" aria-label="Promote to ' + l + '">' + GLYPH[l] + '</button>';
+      return '<button data-p="' + l + '" aria-label="Promote to ' + { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' }[l] + '">' + ChessPieces.svg(game.t === 'w' ? l.toUpperCase() : l) + '</button>';
     }).join('');
     wrap.appendChild(box);
     box.addEventListener('click', function (e) {
@@ -496,15 +512,16 @@
       var u = Chess.uci(m);
       Chess.play(game, m);
       afterMove(m, dropped);
+      online.pending = true;
       BB.api('/api/chess/' + online.code + '/move', { method: 'POST', body: JSON.stringify({ pid: online.pid, uci: u }) })
-        .catch(function (e) { BB.toast(e.message || 'Move not sent'); refreshOnline(); });
+        .then(function (r) { online.pending = false; apply(r.state); })
+        .catch(function (e) { online.pending = false; BB.toast(e.message || 'Move not sent'); online.sig = ''; poll(); });
       return;
     }
     Chess.play(game, m);
     afterMove(m, dropped);
     if (MODE === 'local') {
       BB.lsSet('bb_chess_local', { moves: game.moves.map(function (x) { return x.uci; }) });
-      if (autoFlip && !over) setTimeout(function () { flipped = game.t === 'b'; render(); }, 450);
     }
     if (MODE === 'bot') { save(); maybeBot(); }
   }
@@ -532,9 +549,9 @@
     var el = document.querySelector('#board [data-sq="' + sq + '"]');
     if (!el) return;
     var r = el.getBoundingClientRect(), g = document.createElement('span');
-    g.className = 'ch-fly ch-pc ' + Chess.colorOf(piece);
-    g.textContent = GLYPH[piece.toLowerCase()];
-    g.style.cssText += ';left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;display:grid;place-items:center;font-size:' + r.width * 0.8 + 'px';
+    g.className = 'ch-fly';
+    g.innerHTML = ChessPieces.svg(piece);
+    g.style.cssText += ';left:' + (r.left + r.width * 0.06) + 'px;top:' + (r.top + r.height * 0.06) + 'px;width:' + r.width * 0.88 + 'px;height:' + r.height * 0.88 + 'px';
     document.body.appendChild(g);
     var side = Math.random() < 0.5 ? -1 : 1;
     g.animate([
@@ -677,7 +694,7 @@
   /* ---------------- online ---------------- */
   function onlineScreen() {
     var code = (P.get('code') || '').toUpperCase();
-    var saved = BB.lsGet('bb_chess_online', null);
+    var saved = seat.get();
     if (code && saved && saved.code === code) return joinOnline(code, saved.pid);
     if (code) return joinOnline(code);
     var color = 'random';
@@ -696,7 +713,7 @@
       b.addEventListener('click', function () { color = b.getAttribute('data-color'); mount.querySelectorAll('[data-color]').forEach(function (x) { x.classList.toggle('on', x === b); }); });
     });
     mount.querySelector('#create').addEventListener('click', function () {
-      BB.api('/api/chess', { method: 'POST', body: JSON.stringify({ color: color, name: BB.user ? BB.user.username : 'Player' }) })
+      BB.api('/api/chess', { method: 'POST', body: JSON.stringify({ color: color, name: BB.lsGet('bb_name', '') || (BB.user ? BB.user.username : 'Player') }) })
         .then(function (r) { start(r); }).catch(function (e) { BB.toast(e.message || 'Could not make a game'); });
     });
     mount.querySelector('#joinf').addEventListener('submit', function (e) {
@@ -707,12 +724,12 @@
     BB.fitBoard && BB.fitBoard();
   }
   function joinOnline(code, pid) {
-    BB.api('/api/chess/' + code + '/join', { method: 'POST', body: JSON.stringify({ pid: pid || '', name: BB.user ? BB.user.username : 'Player' }) })
-      .then(start).catch(function (e) { BB.toast(e.message || 'Could not join'); BB.lsSet('bb_chess_online', null); history.replaceState(null, '', '?mode=online'); P = new URLSearchParams(''); onlineScreen(); });
+    BB.api('/api/chess/' + code + '/join', { method: 'POST', body: JSON.stringify({ pid: pid || '', name: BB.lsGet('bb_name', '') || (BB.user ? BB.user.username : 'Player') }) })
+      .then(start).catch(function (e) { BB.toast(e.message || 'Could not join'); seat.set(null); history.replaceState(null, '', '?mode=online'); P = new URLSearchParams(''); onlineScreen(); });
   }
   function start(r) {
     online = { code: r.code, pid: r.pid, view: r.state };
-    BB.lsSet('bb_chess_online', { code: r.code, pid: r.pid });
+    seat.set({ code: r.code, pid: r.pid });
     history.replaceState(null, '', '?mode=online&code=' + r.code);
     me = r.color; flipped = me === 'b'; over = null;
     game = Chess.replay(r.state.moves);
@@ -731,14 +748,30 @@
       (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () { BB.toast('Link copied'); }, function () { prompt('Send this link:', link); });
     });
   }
+  // Live updates over EventSource, plus a check-in every few seconds in case
+  // the live stream is ever cut (a deploy, a proxy, a sleepy phone).
   function listen() {
     if (online.es) online.es.close();
     var es = new EventSource('/api/chess/' + online.code + '/events?pid=' + online.pid);
     online.es = es;
     es.onmessage = function (e) { apply(JSON.parse(e.data)); };
+    clearInterval(online.poll);
+    online.poll = setInterval(poll, 2500);
   }
-  function refreshOnline() { listen(); }
+  function poll() {
+    if (!online || document.hidden) return;
+    BB.api('/api/chess/' + online.code + '?pid=' + online.pid).then(function (r) { apply(r.state); }).catch(function (e) {
+      if (/does not match/.test(e.message || '') && !online.gone) { online.gone = true; BB.toast('That game is no longer on the server'); }
+    });
+  }
   function apply(v) {
+    if (!v) return;
+    // A move of ours is on its way to the server; do not roll it back with older news.
+    if (online.pending && v.moves.length < game.moves.length) return;
+    // Nothing new since the last update: leave the board alone.
+    var sig = JSON.stringify([v.moves, !!v.white, !!v.black, v.white && v.white.on, v.black && v.black.on, v.over, v.drawOffer, v.rematch, v.game]);
+    if (sig === online.sig) return;
+    online.sig = sig;
     var prevGame = online.view && online.view.game;
     var hadBoth = online.view && online.view.white && online.view.black;
     online.view = v;

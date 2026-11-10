@@ -649,14 +649,16 @@ app.post('/api/rooms/:code/leave', (req, res) => {
 });
 
 // ---------- Static ----------
-// ---------- Online chess (in memory, like party rooms) ----------
-// Every move is checked with the same engine the page uses.
+// ---------- Online chess ----------
+// Every move is checked with the same engine the page uses. Games are kept in
+// memory for speed and saved to storage after every change, so a restart or a
+// deploy in the middle of a game loses nothing.
 const Chess = require('./public/js/games/chess-engine.js');
 const chessRooms = new Map();
 
 function chessView(room) {
   const s = room.state, st = Chess.status(s);
-  const seat = (p) => (p ? { name: p.name, on: Date.now() - p.lastSeen < PLAYER_IDLE_MS } : null);
+  const seat = (p) => (p ? { name: p.name, on: Date.now() - (p.lastSeen || 0) < PLAYER_IDLE_MS } : null);
   return {
     code: room.code, white: seat(room.white), black: seat(room.black),
     moves: s.moves.map((m) => m.uci), san: s.moves.map((m) => m.san), turn: s.t,
@@ -665,32 +667,50 @@ function chessView(room) {
     drawOffer: room.drawOffer || '', rematch: room.rematch || [], game: room.game,
   };
 }
+function chessSave(room) {
+  const data = {
+    code: room.code, white: room.white, black: room.black, moves: room.state.moves.map((m) => m.uci),
+    result: room.result, reason: room.reason, drawOffer: room.drawOffer, rematch: room.rematch, game: room.game,
+  };
+  store.chess.save(room.code, data).catch((e) => console.error('chess save failed:', e.message));
+}
 function chessBroadcast(room) {
   const payload = 'data: ' + JSON.stringify(chessView(room)) + '\n\n';
   room.clients.forEach((res) => { try { res.write(payload); } catch (e) {} });
 }
+function chessChanged(room) { chessSave(room); chessBroadcast(room); }
 function chessSeat(room, pid) {
+  if (!pid) return '';
   if (room.white && room.white.id === pid) { room.white.lastSeen = Date.now(); return 'w'; }
   if (room.black && room.black.id === pid) { room.black.lastSeen = Date.now(); return 'b'; }
   return '';
 }
-function findChess(req, res) {
-  const room = chessRooms.get(String(req.params.code || '').toUpperCase());
+async function findChess(req, res) {
+  const code = String(req.params.code || '').toUpperCase();
+  let room = chessRooms.get(code);
+  if (!room && /^[A-Z0-9]{4}$/.test(code)) {
+    const data = await store.chess.load(code);
+    if (data) {
+      room = { ...data, state: Chess.replay(data.moves), clients: [], touched: Date.now() };
+      chessRooms.set(code, room);
+    }
+  }
   if (!room) { res.status(404).json({ error: 'That code does not match a game' }); return null; }
   room.touched = Date.now();
   return room;
 }
+// Memory is only a cache: drop quiet games, they reload from storage if anyone comes back.
 setInterval(() => {
   const now = Date.now();
   for (const [code, room] of chessRooms) {
-    if (now - room.touched > ROOM_IDLE_MS) { room.clients.forEach((r) => { try { r.end(); } catch (e) {} }); chessRooms.delete(code); }
+    if (!room.clients.length && now - room.touched > 30 * 60e3) chessRooms.delete(code);
   }
 }, 60e3).unref();
 
-app.post('/api/chess', (req, res) => {
+app.post('/api/chess', wrap(async (req, res) => {
   if (!limit('chess:' + req.ip, 30, 10 * 60e3)) return res.status(429).json({ error: 'Slow down a moment' });
   let code;
-  do { code = newCode(); } while (chessRooms.has(code));
+  do { code = newCode(); } while (chessRooms.has(code) || rooms.has(code) || (await store.chess.load(code)));
   const pid = crypto.randomBytes(12).toString('hex');
   const want = (req.body && req.body.color) || 'random';
   const color = want === 'white' ? 'w' : want === 'black' ? 'b' : (crypto.randomInt(2) ? 'w' : 'b');
@@ -698,26 +718,35 @@ app.post('/api/chess', (req, res) => {
   const room = { code, white: color === 'w' ? me : null, black: color === 'b' ? me : null, state: Chess.create(),
     clients: [], touched: Date.now(), game: 1, result: '', reason: '', drawOffer: '', rematch: [] };
   chessRooms.set(code, room);
+  chessSave(room);
   res.json({ code, pid, color, state: chessView(room) });
-});
+}));
 
-app.post('/api/chess/:code/join', (req, res) => {
-  const room = findChess(req, res);
+// The current game, for anyone polling or checking that a code exists.
+app.get('/api/chess/:code', wrap(async (req, res) => {
+  const room = await findChess(req, res);
+  if (!room) return;
+  chessSeat(room, req.query.pid);
+  res.json({ state: chessView(room) });
+}));
+
+app.post('/api/chess/:code/join', wrap(async (req, res) => {
+  const room = await findChess(req, res);
   if (!room) return;
   const pid = req.body && req.body.pid;
-  const already = pid && chessSeat(room, pid);
+  const already = chessSeat(room, pid);
   if (already) return res.json({ code: room.code, pid, color: already, state: chessView(room) });
-  const seat = !room.white ? 'w' : !room.black ? 'b' : '';
-  if (!seat) return res.status(409).json({ error: 'That game already has two players' });
+  const free = !room.white ? 'w' : !room.black ? 'b' : '';
+  if (!free) return res.status(409).json({ error: 'That game already has two players' });
   const id = crypto.randomBytes(12).toString('hex');
   const player = { id, name: cleanName(req.body && req.body.name, req.user ? req.user.username : 'Player'), lastSeen: Date.now() };
-  if (seat === 'w') room.white = player; else room.black = player;
-  chessBroadcast(room);
-  res.json({ code: room.code, pid: id, color: seat, state: chessView(room) });
-});
+  if (free === 'w') room.white = player; else room.black = player;
+  chessChanged(room);
+  res.json({ code: room.code, pid: id, color: free, state: chessView(room) });
+}));
 
-app.get('/api/chess/:code/events', (req, res) => {
-  const room = findChess(req, res);
+app.get('/api/chess/:code/events', wrap(async (req, res) => {
+  const room = await findChess(req, res);
   if (!room) return;
   chessSeat(room, req.query.pid);
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
@@ -725,13 +754,13 @@ app.get('/api/chess/:code/events', (req, res) => {
   res.write('retry: 2000\n\n');
   res.write('data: ' + JSON.stringify(chessView(room)) + '\n\n');
   room.clients.push(res);
-  const beat = setInterval(() => { chessSeat(room, req.query.pid); try { res.write(': ping\n\n'); } catch (e) {} }, 20e3);
+  const beat = setInterval(() => { chessSeat(room, req.query.pid); try { res.write(': ping\n\n'); } catch (e) {} }, 15e3);
   req.on('close', () => { clearInterval(beat); room.clients = room.clients.filter((c) => c !== res); chessBroadcast(room); });
   chessBroadcast(room);
-});
+}));
 
-app.post('/api/chess/:code/move', (req, res) => {
-  const room = findChess(req, res);
+app.post('/api/chess/:code/move', wrap(async (req, res) => {
+  const room = await findChess(req, res);
   if (!room) return;
   const { pid, uci } = req.body || {};
   const seat = chessSeat(room, pid);
@@ -741,12 +770,12 @@ app.post('/api/chess/:code/move', (req, res) => {
   if (typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci) || !Chess.play(room.state, uci))
     return res.status(400).json({ error: 'That move is not legal' });
   room.drawOffer = '';
-  chessBroadcast(room);
-  res.json({ ok: true });
-});
+  chessChanged(room);
+  res.json({ ok: true, state: chessView(room) });
+}));
 
-app.post('/api/chess/:code/:action(resign|draw|rematch)', (req, res) => {
-  const room = findChess(req, res);
+app.post('/api/chess/:code/:action(resign|draw|rematch)', wrap(async (req, res) => {
+  const room = await findChess(req, res);
   if (!room) return;
   const seat = chessSeat(room, req.body && req.body.pid);
   if (!seat) return res.status(403).json({ error: 'You are not playing in this game' });
@@ -764,9 +793,9 @@ app.post('/api/chess/:code/:action(resign|draw|rematch)', (req, res) => {
       room.state = Chess.create(); room.result = ''; room.reason = ''; room.drawOffer = ''; room.rematch = []; room.game++;
     }
   }
-  chessBroadcast(room);
-  res.json({ ok: true });
-});
+  chessChanged(room);
+  res.json({ ok: true, state: chessView(room) });
+}));
 
 const PUB = path.join(__dirname, 'public');
 

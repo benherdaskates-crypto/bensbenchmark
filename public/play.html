@@ -19,6 +19,19 @@
 <script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='off'?'off':'on')}catch(e){}</script>
 <title>Play a friend | BensBenchmark</title>
 <style>
+  /* game tiles: logo, name and how the race is won */
+  .vs-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .vs-pick .chip { display: flex; align-items: center; gap: 10px; height: auto; padding: 10px 12px; border-radius: 14px; text-align: left;
+    justify-content: flex-start; white-space: normal; line-height: 1.2; border: 1px solid var(--border); background: var(--surface-2);
+    transition: transform .25s var(--spring), border-color .2s, box-shadow .25s; }
+  .vs-pick .chip:hover:not([disabled]) { transform: translateY(-2px); border-color: var(--border-mid); }
+  .vs-pick .chip.on { border-color: var(--g); box-shadow: 0 0 0 2px var(--g), 0 8px 22px color-mix(in srgb, var(--g) 30%, transparent); background: color-mix(in srgb, var(--g) 12%, var(--surface-2)); color: var(--text); }
+  .vs-pick .gi { width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid; place-items: center; color: #fff;
+    background: var(--g); box-shadow: inset 0 -2px 0 rgba(0,0,0,.2); }
+  .vs-pick .gi svg { width: 20px; height: 20px; }
+  .vs-pick .gn { font-weight: 700; font-size: .9rem; display: block; }
+  .vs-pick .gs { font-size: .72rem; color: var(--muted); font-weight: 500; display: block; margin-top: 2px; }
+  .vs-pick .chip[disabled] { opacity: .7; cursor: default; }
   .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 720px) { .panes { grid-template-columns: 1fr; } }
 
@@ -156,11 +169,19 @@
 
   var VERSUS = ['brillion', 'wordle', 'pricedle', 'greens', 'typing', 'aim', 'reaction'];
   function gname(k) { return BB.GAMES[k].name; }
+  var HOW = { brillion: 'Rarest answers win', wordle: 'Fewest guesses wins', pricedle: 'Closest price wins', greens: 'Fewest strokes wins',
+    typing: 'Fastest typing wins', aim: 'Quickest clicks win', reaction: 'Fastest reaction wins', chess: 'One on one, live board' };
+  // A tile with the game's logo, so it is clear what you are picking.
+  function tile(k, on, disabled) {
+    var g = BB.GAMES[k];
+    return '<button class="chip' + (on ? ' on' : '') + '"' + (disabled ? ' disabled' : '') + ' data-g="' + k + '" style="--g:' + g.color + '">' +
+      '<span class="gi">' + g.glyph + '</span><span><span class="gn">' + g.name + '</span><span class="gs">' + HOW[k] + '</span></span></button>';
+  }
 
   /* ---------------- entry ---------------- */
   function renderEntry(err) {
     var preset = params.get('game');
-    if (VERSUS.indexOf(preset) === -1) preset = 'wordle';
+    if (VERSUS.indexOf(preset) === -1 && preset !== 'chess') preset = 'wordle';
     var joinCode = (params.get('code') || '').toUpperCase();
     var name = BB.lsGet('bb_name', '') || (BB.user ? BB.user.username : '');
 
@@ -175,10 +196,8 @@
         '<div class="card">' +
           '<h3 style="font-size:1.05rem">Start a room</h3>' +
           '<p class="hint" style="margin-top:4px">Pick a game. You can change it later.</p>' +
-          '<div class="chips mt-2" id="pickgame">' +
-            VERSUS.map(function (k) {
-              return '<button class="chip' + (k === preset ? ' on' : '') + '" data-g="' + k + '">' + gname(k) + '</button>';
-            }).join('') +
+          '<div class="vs-pick mt-2" id="pickgame">' +
+            VERSUS.concat(['chess']).map(function (k) { return tile(k, k === preset); }).join('') +
           '</div>' +
           '<button class="btn btn-block mt-3" id="make"><span>Make a code</span></button>' +
         '</div>' +
@@ -206,6 +225,7 @@
 
     view.querySelector('#make').addEventListener('click', async function () {
       this.disabled = true;
+      if (chosen === 'chess') return makeChess(myName());
       try { await VS.create(myName(), chosen); enterRoom(); }
       catch (e) { renderEntry(e.message); }
     });
@@ -219,8 +239,21 @@
       var code = view.querySelector('#code').value.trim().toUpperCase();
       if (code.length !== 4) return BB.toast('Codes are four characters');
       try { await VS.join(code, myName()); enterRoom(); }
-      catch (e) { renderEntry(e.message); }
+      catch (e) {
+        // Not a party room? It may be a chess game.
+        try { await BB.api('/api/chess/' + code); location.href = '/games/chess?mode=online&code=' + code; }
+        catch (e2) { renderEntry(e.message); }
+      }
     }
+  }
+
+  // Chess is one on one with its own board, so it gets its own game and page.
+  async function makeChess(name) {
+    try {
+      var r = await BB.api('/api/chess', { method: 'POST', body: JSON.stringify({ color: 'random', name: name || 'Player' }) });
+      try { sessionStorage.setItem('bb_chess_seat', JSON.stringify({ code: r.code, pid: r.pid })); } catch (e) {}
+      location.href = '/games/chess?mode=online&code=' + r.code;
+    } catch (e) { renderEntry(e.message); }
   }
 
   /* ---------------- room ---------------- */
@@ -260,10 +293,8 @@
       '<div class="player-list" id="plist"></div>' +
       '<div class="mt-4">' +
         '<div class="modes-label">Game</div>' +
-        '<div class="chips" id="gamechips">' +
-          VERSUS.map(function (k) {
-            return '<button class="chip' + (k === g ? ' on' : '') + '"' + (host ? '' : ' disabled') + ' data-g="' + k + '">' + gname(k) + '</button>';
-          }).join('') +
+        '<div class="vs-pick" id="gamechips">' +
+          VERSUS.map(function (k) { return tile(k, k === g, !host); }).join('') +
         '</div>' +
         '<div id="optbox"></div>' +
         (host

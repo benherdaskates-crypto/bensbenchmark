@@ -28,10 +28,8 @@
   42% { transform:translate(calc(4px*var(--u)), calc(-2px*var(--u))) rotate(.6deg); } 44% { transform:translate(calc(-2px*var(--u)),0); } 46%, 100% { transform:none; } }
 .pv-chess i { display:block; }
 .pv-chess i.l { background:#f0d9b5; } .pv-chess i.d { background:#b58863; }
-.pv-chess b { position:absolute; width:var(--s); height:var(--s); display:grid; place-items:center;
-  font-size:calc(19px*var(--u)); line-height:1; font-weight:400; font-family:'Segoe UI Symbol','Noto Sans Symbols 2',serif; }
-.pv-chess b.w { color:#fff; text-shadow:0 0 1px #000, 0 0 1px #000, 0 1px 3px rgba(0,0,0,.55); }
-.pv-chess b.k { color:#141414; }
+.pv-chess b { position:absolute; width:var(--s); height:var(--s); display:grid; place-items:center; }
+.pv-chess b .cp { width:88%; height:88%; }
 .pv-chess .mover { animation: pvQueen 7s cubic-bezier(.3,.7,.3,1) infinite both; z-index:3; }
 @keyframes pvQueen { 0%, 20% { transform: translate(0,0) scale(1); filter:none; }
   27% { transform: translate(0, calc(-3px*var(--u))) scale(1.35); filter: drop-shadow(0 calc(8px*var(--u)) calc(6px*var(--u)) rgba(0,0,0,.5)); }
@@ -278,11 +276,12 @@
       let sq = '';
       for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) sq += `<i class="${(r + f) % 2 ? 'd' : 'l'}"></i>`;
       const at = (f, r) => `left:calc(var(--s) * ${f});top:calc(var(--s) * ${r})`;
-      const W = [['♛', 7, 3, 'mover'], ['♝', 2, 4, 'glow'], ['♚', 4, 7], ['♟', 4, 4], ['♟', 3, 6], ['♟', 5, 6], ['♟', 6, 6], ['♜', 0, 7], ['♜', 7, 7], ['♞', 1, 7]];
-      const B = [['♚', 4, 0, 'king'], ['♛', 3, 0], ['♟', 5, 1, 'gone'], ['♟', 4, 3], ['♞', 2, 2], ['♞', 5, 2], ['♜', 0, 0], ['♜', 7, 0], ['♝', 2, 0], ['♟', 0, 1], ['♟', 1, 1], ['♟', 6, 1], ['♟', 7, 1]];
+      // The same piece drawings as the game itself (js/games/chess-pieces.js).
+      const W = [['Q', 7, 3, 'mover'], ['B', 2, 4, 'glow'], ['K', 4, 7], ['P', 4, 4], ['P', 3, 6], ['P', 5, 6], ['P', 6, 6], ['R', 0, 7], ['R', 7, 7], ['N', 1, 7]];
+      const B = [['k', 4, 0, 'king'], ['q', 3, 0], ['p', 5, 1, 'gone'], ['p', 4, 3], ['n', 2, 2], ['n', 5, 2], ['r', 0, 0], ['r', 7, 0], ['b', 2, 0], ['p', 0, 1], ['p', 1, 1], ['p', 6, 1], ['p', 7, 1]];
+      const pc = (g) => (window.ChessPieces ? ChessPieces.svg(g) : '');
       return '<div class="pv-in"><div class="pv-chess">' + sq + `<span class="mate" style="${at(4, 0)}"></span><span class="boom" style="${at(5, 1)}"></span>` +
-        W.map(([g, f, r, c]) => `<b class="w ${c || ''}" style="${at(f, r)}">${g}</b>`).join('') +
-        B.map(([g, f, r, c]) => `<b class="k ${c || ''}" style="${at(f, r)}">${g}</b>`).join('') +
+        W.concat(B).map(([g, f, r, c]) => `<b class="${c || ''}" style="${at(f, r)}">${pc(g)}</b>`).join('') +
         '<span class="banner">CHECKMATE</span></div></div>';
     },
     greens() {

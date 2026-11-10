@@ -29,7 +29,7 @@ const DATA_EPOCH = 2;
 /* JSON file backend                                                 */
 /* ---------------------------------------------------------------- */
 function jsonBackend() {
-  let db = { users: [], sessions: [], requests: [], dailyStats: {}, plays: {}, answers: {} };
+  let db = { users: [], sessions: [], requests: [], dailyStats: {}, plays: {}, answers: {}, chess: {} };
   let timer = null;
 
   function load() {
@@ -44,6 +44,7 @@ function jsonBackend() {
     db.dailyStats = db.dailyStats || {};
     db.plays = db.plays || {};
     db.answers = db.answers || {};
+    db.chess = db.chess || {};
     if ((db.epoch || 1) < DATA_EPOCH) {
       Object.assign(db, { users: [], sessions: [], dailyStats: {}, plays: {}, epoch: DATA_EPOCH });
       console.log(`Data epoch ${DATA_EPOCH}: accounts and scores cleared for a fresh start.`);
@@ -111,6 +112,16 @@ function jsonBackend() {
     requests: {
       async add(r) { db.requests.push(r); save(); return r; },
       async all() { return db.requests; },
+    },
+
+    chess: {
+      async save(code, data) {
+        db.chess[code] = { data, updated: Date.now() };
+        const week = Date.now() - 7 * 864e5;
+        for (const k of Object.keys(db.chess)) if (db.chess[k].updated < week) delete db.chess[k];
+        save();
+      },
+      async load(code) { return db.chess[code] ? db.chess[code].data : null; },
     },
 
     answers: {
@@ -231,6 +242,11 @@ function pgBackend(url, directUrl) {
           key   TEXT PRIMARY KEY,
           tries JSONB NOT NULL DEFAULT '[0,0,0,0,0,0]'::jsonb,
           fail  INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS chess_games (
+          code    TEXT PRIMARY KEY,
+          data    JSONB NOT NULL,
+          updated BIGINT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS answer_stats (
           key    TEXT NOT NULL,
@@ -392,6 +408,20 @@ function pgBackend(url, directUrl) {
       async all() {
         const { rows } = await pool.query('SELECT * FROM requests ORDER BY at DESC LIMIT 500');
         return rows.map((r) => ({ id: r.id, from: r.from_name, message: r.message, at: Number(r.at) }));
+      },
+    },
+
+    chess: {
+      async save(code, data) {
+        await pool.query(
+          `INSERT INTO chess_games (code, data, updated) VALUES ($1, $2, $3)
+           ON CONFLICT (code) DO UPDATE SET data = EXCLUDED.data, updated = EXCLUDED.updated`,
+          [code, JSON.stringify(data), Date.now()]);
+        if (Math.random() < 0.02) await pool.query('DELETE FROM chess_games WHERE updated < $1', [Date.now() - 7 * 864e5]);
+      },
+      async load(code) {
+        const { rows } = await pool.query('SELECT data FROM chess_games WHERE code = $1', [code]);
+        return rows[0] ? rows[0].data : null;
       },
     },
 
