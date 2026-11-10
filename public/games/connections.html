@@ -97,7 +97,16 @@
   var P = new URLSearchParams(location.search);
   var MODE = /^(infinite|endless)$/.test(P.get('mode')) ? 'infinite' : 'daily';
   var COLORS = ['#c9962a', '#3a8a4a', '#2a7fb8', '#7a4bbd'];
-  var MAX_MISTAKES = 4;
+  /* Harder levels allow fewer mistakes and stop saying "one away". */
+  var LEVELS = {
+    normal: { label: 'Normal', mistakes: 4, hint: true },
+    hard:   { label: 'Hard',   mistakes: 2, hint: false },
+    expert: { label: 'Expert', mistakes: 1, hint: false }
+  };
+  var DIFF = LEVELS[P.get('diff')] ? P.get('diff') : BB.lsGet('bb_conn_diff', 'normal');
+  if (!LEVELS[DIFF]) DIFF = 'normal';
+  BB.lsSet('bb_conn_diff', DIFF);
+  var MAX_MISTAKES = LEVELS[DIFF].mistakes;
 
   var store = BB.lsGet('bb_conn', { wins: 0, played: 0, perfect: 0 });
   var puzzle = [], tiles = [], selected = [], solved = [], mistakes = 0, over = false, busy = false;
@@ -109,8 +118,16 @@
     '<div class="mode-bar">' +
       '<span class="lbl">Mode</span>' +
       '<div class="chips">' +
-        '<a class="chip' + (MODE === 'daily' ? ' on' : '') + '" href="?mode=daily">Daily</a>' +
-        '<a class="chip' + (MODE === 'infinite' ? ' on' : '') + '" href="?mode=infinite">Endless</a>' +
+        '<a class="chip' + (MODE === 'daily' ? ' on' : '') + '" href="?mode=daily&diff=' + DIFF + '">Daily</a>' +
+        '<a class="chip' + (MODE === 'infinite' ? ' on' : '') + '" href="?mode=infinite&diff=' + DIFF + '">Endless</a>' +
+      '</div>' +
+      '<span class="sep"></span>' +
+      '<span class="lbl">Difficulty</span>' +
+      '<div class="chips">' +
+        Object.keys(LEVELS).map(function (k) {
+          return '<a class="chip' + (k === DIFF ? ' on' : '') + '" href="?mode=' + MODE + '&diff=' + k + '" title="' +
+            LEVELS[k].mistakes + ' mistake' + (LEVELS[k].mistakes === 1 ? '' : 's') + (LEVELS[k].hint ? ', one away hints' : ', no hints') + '">' + LEVELS[k].label + '</a>';
+        }).join('') +
       '</div>' +
     '</div>' +
     '<div id="banner"></div>' +
@@ -297,7 +314,7 @@
       el.classList.add('shake');
       setTimeout(function () { el.classList.remove('shake'); }, 460);
     });
-    msgEl.textContent = top === 3 ? 'One away' : 'Not a group';
+    msgEl.textContent = top === 3 && LEVELS[DIFF].hint ? 'One away' : 'Not a group';
     setTimeout(function () { if (!over) msgEl.textContent = ''; }, 1700);
     busy = false;
     goBtn.disabled = selected.length !== 4 || over;

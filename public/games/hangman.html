@@ -62,12 +62,14 @@
   var LEVELS = {
     easy:   { label: 'Easy',   maxLen: 7,  clue: 'always', freeLetter: true,  note: 'Clue shown, plus a free letter' },
     medium: { label: 'Medium', maxLen: 99, clue: 'always', freeLetter: false, note: 'Clue shown' },
-    hard:   { label: 'Hard',   minLen: 8,  clue: 'after',  freeLetter: false, note: 'Clue appears after 3 wrong guesses' }
+    hard:   { label: 'Hard',   minLen: 8,  clue: 'after',  freeLetter: false, note: 'Clue appears after 3 wrong guesses' },
+    expert: { label: 'Expert', minLen: 9,  clue: 'never',  freeLetter: false, lives: 4, note: 'No clue at all, and only 4 wrong guesses' }
   };
   var DIFF = LEVELS[P.get('diff')] ? P.get('diff') : BB.lsGet('bb_hang_diff', 'medium');
   if (!LEVELS[DIFF]) DIFF = 'medium';
   BB.lsSet('bb_hang_diff', DIFF);
   var L = LEVELS[DIFF];
+  MAX_WRONG = L.lives || 6;
 
   var store = BB.lsGet('bb_hangman', { streak: 0, played: 0, won: 0 });
   var word = '', hint = '', used = {}, wrong = 0, over = false;
@@ -174,7 +176,7 @@
     }
     paintClue();
     msgEl.textContent = '';
-    for (var i = 0; i < MAX_WRONG; i++) document.getElementById('p' + i).classList.remove('show');
+    for (var i = 0; i < 6; i++) document.getElementById('p' + i).classList.remove('show');
     document.querySelectorAll('.key').forEach(function (b) { b.classList.remove('correct', 'absent'); });
     Object.keys(used).forEach(function (c) {
       var b = document.querySelector('.key[data-k="' + c.toLowerCase() + '"]');
@@ -185,7 +187,7 @@
   }
 
   /* Hard keeps the clue back until you have made a few mistakes. */
-  function clueVisible() { return over || L.clue === 'always' || wrong >= 3; }
+  function clueVisible() { return over || L.clue === 'always' || (L.clue === 'after' && wrong >= 3); }
 
   function paintClue() {
     var el = document.getElementById('hint');
@@ -225,8 +227,9 @@
       else if (!hitIt) BB.fx.shake(document.querySelector('.gallows'), 7);
     }
     if (!hitIt) {
-      document.getElementById('p' + wrong).classList.add('show');
       wrong++;
+      // Fewer lives draw the figure faster, so it is always complete at the end.
+      for (var pi = 0; pi < Math.round(wrong * 6 / MAX_WRONG); pi++) document.getElementById('p' + pi).classList.add('show');
       BB.setStat('st-left', MAX_WRONG - wrong);
       paintClue();
     }

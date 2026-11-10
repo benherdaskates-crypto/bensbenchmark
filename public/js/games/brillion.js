@@ -217,6 +217,11 @@
 
   BBG.brillion = {
     TIERS,
+    levels: {
+      normal: { label: 'Normal', seconds: SECONDS, penalty: PENALTY, help: true, floor: 0, note: '25 seconds, spelling help on' },
+      hard:   { label: 'Hard',   seconds: 15, penalty: 5, help: true, floor: 0, note: '15 seconds, wrong answers cost 5' },
+      expert: { label: 'Expert', seconds: 10, penalty: 5, help: false, floor: 10, note: '10 seconds, no spelling help, the most common answers score nothing' },
+    },
     choose(seed) {
       const all = window.BRILLION_PROMPTS.map((_, i) => i);
       return BB.shuffle(BB.rng('brillion:' + seed), all).slice(0, ROUNDS);
@@ -226,6 +231,7 @@
       css();
       hooks = hooks || {};
       const picks = this.choose(opts.seed);
+      const L = this.levels[opts.level] || this.levels.normal;
       const results = [];
       let round = 0, total = 0, deadline = 0, raf = 0, timer = 0, locked = false, alive = true;
 
@@ -297,7 +303,7 @@
 
         function suggest() {
           pending = null;
-          fill = complete(p, input.value);
+          fill = L.help ? complete(p, input.value) : null;
           ghost.innerHTML = fill ? `<span>${esc(input.value)}</span>${esc(fill.slice(input.value.replace(/^\s+/, '').length))}` : '';
           help.innerHTML = fill ? `<button class="br-fill" type="button" id="br-fill">${esc(fill)} <kbd>Tab</kbd></button>` : '';
           if (fill) help.querySelector('#br-fill').addEventListener('click', () => accept());
@@ -311,11 +317,11 @@
           input.focus();
         }
         function wrong(text) {
-          deadline -= PENALTY * 1000;
+          deadline -= L.penalty * 1000;
           input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
           input.select();
           help.innerHTML = '';
-          msg.textContent = text + ' -' + PENALTY + 's';
+          msg.textContent = text + ' -' + L.penalty + 's';
           call('flash', 'rgba(255,90,90,.6)', 0.18);
           BB.sfx.bad();
         }
@@ -343,18 +349,18 @@
           if (pending && pending.typed === text) return settle(pending.hit, text, false, true);
           const m = match(p, text);
           if (!m) return wrong('Not on our list.');
-          if (m.how === 'ask') return offer(m, text);
+          if (m.how === 'ask') return L.help ? offer(m, text) : wrong('Not on our list.');
           settle(m.hit, text, false, m.how === 'fixed');
         });
         main.querySelector('#br-skip').addEventListener('click', () => settle(null, ''));
         setTimeout(() => input.focus(), 50);
-        deadline = performance.now() + SECONDS * 1000;
+        deadline = performance.now() + L.seconds * 1000;
         cancelAnimationFrame(raf);
         (function tick() {
           if (!alive || locked) return;
           const left = Math.max(0, deadline - performance.now());
           const bar = main.querySelector('#br-bar');
-          if (bar) bar.style.transform = 'scaleX(' + left / (SECONDS * 1000) + ')';
+          if (bar) bar.style.transform = 'scaleX(' + left / (L.seconds * 1000) + ')';
           const t = main.querySelector('#br-time');
           if (t) t.classList.toggle('low', left < 6000);
           if (left <= 0) return settle(null, '', true);
@@ -367,7 +373,7 @@
         locked = true;
         cancelAnimationFrame(raf);
         const p = prompt(picks[round]);
-        const pts = hit ? hit.tier.pts : 0;
+        const pts = hit && hit.tier.pts > L.floor ? hit.tier.pts : 0;
         total += pts;
         results[round] = { q: p.q, answer: hit ? hit.show : '', tier: hit ? hit.tier : null, pts };
         depth();
@@ -381,7 +387,7 @@
           ${hit
             ? `<div class="br-hit"><span class="br-tier" id="br-tier" style="background:${hit.tier.color}">${hit.tier.name}</span>
                  <span class="br-pts" id="br-pts">+${pts}</span><span class="br-ans">${esc(hit.show)}</span>
-                 ${fixed ? '<span class="br-fixed">spelling fixed</span>' : ''}</div>`
+                 ${fixed ? '<span class="br-fixed">spelling fixed</span>' : ''}${!pts ? '<span class="br-fixed">too common for Expert</span>' : ''}</div>`
             : `<div class="br-hit"><span class="br-tier" style="background:#55627a">${timedOut ? 'Time' : 'Skipped'}</span><span class="br-pts">+0</span></div>`}
           <div class="br-msg">${example ? 'A deep cut: <b>' + esc(example) + '</b>' : ''}</div>`;
         quietly(() => BB.sfx[hit ? (pts >= 85 ? 'win' : 'good') : 'lose']());
@@ -422,6 +428,24 @@
       depth();
       ask();
       return function teardown() { alive = false; cancelAnimationFrame(raf); clearTimeout(timer); };
+    },
+
+    // Daily: what everyone answered, prompt by prompt.
+    answers(score, detail) { return ((detail && detail.results) || []).map((r) => (r.answer || 'skipped').toLowerCase()); },
+    statsHtml(pick, score, detail) {
+      const results = (detail && detail.results) || [];
+      const blocks = results.map((r, i) => {
+        const row = pick(i), total = Object.values(row).reduce((a, b) => a + b, 0);
+        if (!total) return '';
+        const mine = (r.answer || 'skipped').toLowerCase();
+        const top = Object.entries(row).sort((a, b) => b[1] - a[1]).slice(0, 4);
+        if (!top.some((t) => t[0] === mine) && row[mine]) top.push([mine, row[mine]]);
+        const same = row[mine] ? Math.round((row[mine] / total) * 100) : 0;
+        return '<div class="dist-q">' + esc(r.q) + '</div><div class="dist-you">' +
+          (r.answer ? 'You said <b>' + esc(r.answer) + '</b>, like ' + same + '% of players' : 'You skipped this one') + '</div>' +
+          BB.distBars(top.map((t) => [esc(t[0]), t[1]]), esc(mine));
+      }).join('');
+      return blocks ? '<div class="kicker mt-3">What everyone said</div>' + blocks : '';
     },
 
     summary(score) {

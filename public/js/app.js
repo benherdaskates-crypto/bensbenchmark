@@ -21,6 +21,7 @@
   const ICON_VERBAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10.5 5 8.5 4.3 6 4.3c-1 0-1.8.1-2.5.3v13c.7-.2 1.5-.3 2.5-.3 2.5 0 4.5.7 6 2.2"/><path d="M12 6.5c1.5-1.5 3.5-2.2 6-2.2 1 0 1.8.1 2.5.3v13c-.7-.2-1.5-.3-2.5-.3-2.5 0-4.5.7-6 2.2"/><path d="M12 6.5v13"/></svg>';
   const ICON_BRILLION = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12c3-5 9-6.5 14-2.5L21 6.5v11l-4.5-3C11.5 18.5 5.5 17 2.5 12Z"/><circle cx="7.6" cy="11.2" r="1" fill="currentColor" stroke="none"/></svg>';
   const ICON_PRICEDLE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13 21a1.4 1.4 0 0 1-2 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.6" cy="7.6" r="1.6"/></svg>';
+  const ICON_CHESS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 20h10"/><path d="M9 20c0-3 1-5 3-7-2.5 0-4 .5-5.5 2L5 13.5C6 10 8.5 6.5 12 4.5l1-1.5 1 2c2.5 1.3 4 4 4 7.5V20"/><circle cx="13.2" cy="8.2" r=".6" fill="currentColor"/></svg>';
   const ICON_GREENS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 20V3"/><path d="M7 3.5l10 3.7L7 11"/><ellipse cx="11" cy="20.4" rx="8" ry="1.6"/></svg>';
 
   const ICON = {
@@ -90,6 +91,19 @@
       about: 'Everyone gets the same nine holes. Pick your line, then stop the swing meter to set the power. Bunkers, water and wind stand between you and par.',
       how: ['Move to aim, then click or press space to lock your line.', 'Stop the swing meter to choose how far the ball flies.', 'Land on the green and the rings decide your putts.'],
       modes: [M.daily('/games/greens?mode=daily'), M.endless('/games/greens?mode=endless', 'A random course every round'), M.friends('greens')],
+    },
+    chess: {
+      name: 'Chess', href: '/games/chess', glyph: ICON_CHESS, color: '#b58863', isNew: true, rank: 5,
+      unit: 'level', dir: 'high', fmt: (v) => (Number(v) >= 12 ? 'Beat Ben' : 'Beat level ' + v), tag: 'Strategy',
+      blurb: 'Climb twelve computer opponents, or play a friend.',
+      about: 'Full chess with every rule: castling, en passant, promotion and all the draws. Work up from Pip, who just learned how the horse moves, through eleven tougher bots to Ben, the final boss. Or send a friend a code and play online.',
+      how: ['Click a piece, then a highlighted square. You can drag pieces too.', 'Beat a bot to climb the ladder. Your best win goes on the leaderboard.', 'Pick any opponent. Ben, the final boss, is the hardest of all.'],
+      modes: [
+        { kind: 'solo', label: 'Play the computer', sub: 'Twelve opponents, from beginner to Ben', href: '/games/chess', icon: 'play' },
+        { kind: 'friends', label: 'Play a friend online', sub: 'Make a code, send it, play live', href: '/games/chess?mode=online', icon: 'globe' },
+        { kind: 'local', label: 'Pass and play', sub: 'Two players, one screen', href: '/games/chess?mode=local', icon: 'users' },
+        { kind: 'boss', label: 'Face Ben', sub: 'The final boss', href: '/games/chess?bot=12', icon: 'crown' },
+      ],
     },
     connections: {
       name: 'Connections', href: '/games/connections', glyph: ICON_CONNECTIONS, color: '#7b6cd9', rank: 5,

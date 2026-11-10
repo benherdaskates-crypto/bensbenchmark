@@ -66,6 +66,7 @@ const GAMES = {
   brillion:   { name: 'Brillion',       dir: 'high', unit: 'points', min: 0,  max: 700 },
   pricedle:   { name: 'Pricedle',       dir: 'high', unit: 'streak', min: 0,  max: 5000 },
   greens:     { name: 'Daily Greens',   dir: 'low',  unit: 'strokes', min: 9, max: 120 },
+  chess:      { name: 'Chess',          dir: 'high', unit: 'level',  min: 1,  max: 12 },
 };
 
 // ---------- Domain ----------
@@ -307,6 +308,37 @@ app.get('/api/daily-stats/:key', wrap(async (req, res) => {
   if (!DAILY_KEY.test(req.params.key)) return res.status(400).json({ error: 'Bad key' });
   const row = await store.daily.get(req.params.key);
   res.json({ stats: row, total: row.t.reduce((a, b) => a + b, 0) + row.fail });
+}));
+
+// ---------- What everyone answered on a daily puzzle ----------
+// Brillion stores each round's answer, Pricedle the guesses taken, Daily Greens
+// the score against par. Keys look like "brillion:41:3" (game, puzzle, slot).
+const ANSWER_GAMES = { brillion: 7, pricedle: 1, greens: 1, connections: 1, hangman: 1 };
+const cleanAnswer = (a) => String(a == null ? '' : a).toLowerCase().replace(/[^a-z0-9 +\-]/g, '').trim().slice(0, 40);
+
+app.post('/api/daily-answers', wrap(async (req, res) => {
+  const { game, day, answers } = req.body || {};
+  const slots = ANSWER_GAMES[game];
+  const n = Number(day);
+  if (!slots || !Number.isInteger(n) || n < 1 || n > 1e6 || !Array.isArray(answers) || answers.length > slots)
+    return res.status(400).json({ error: 'Bad result' });
+  if (!limit('answers:' + game + ':' + n + ':' + req.ip, 3, 24 * 60 * 60e3)) return res.status(429).json({ error: 'Already counted' });
+  const keys = [];
+  for (let i = 0; i < answers.length; i++) {
+    const a = cleanAnswer(answers[i]);
+    const key = game + ':' + n + ':' + i;
+    keys.push(key);
+    if (a) await store.answers.bump(key, a);
+  }
+  res.json({ stats: await store.answers.get(keys) });
+}));
+
+app.get('/api/daily-answers/:game/:day', wrap(async (req, res) => {
+  const slots = ANSWER_GAMES[req.params.game];
+  const n = Number(req.params.day);
+  if (!slots || !Number.isInteger(n) || n < 1) return res.status(400).json({ error: 'Bad key' });
+  const keys = Array.from({ length: slots }, (_, i) => req.params.game + ':' + n + ':' + i);
+  res.json({ stats: await store.answers.get(keys) });
 }));
 
 // ---------- Popularity ----------
@@ -617,6 +649,125 @@ app.post('/api/rooms/:code/leave', (req, res) => {
 });
 
 // ---------- Static ----------
+// ---------- Online chess (in memory, like party rooms) ----------
+// Every move is checked with the same engine the page uses.
+const Chess = require('./public/js/games/chess-engine.js');
+const chessRooms = new Map();
+
+function chessView(room) {
+  const s = room.state, st = Chess.status(s);
+  const seat = (p) => (p ? { name: p.name, on: Date.now() - p.lastSeen < PLAYER_IDLE_MS } : null);
+  return {
+    code: room.code, white: seat(room.white), black: seat(room.black),
+    moves: s.moves.map((m) => m.uci), san: s.moves.map((m) => m.san), turn: s.t,
+    over: !!(room.result || st.over), result: room.result || (st.over ? st.result : ''),
+    reason: room.reason || (st.over ? st.reason : ''), check: !st.over && !!st.check,
+    drawOffer: room.drawOffer || '', rematch: room.rematch || [], game: room.game,
+  };
+}
+function chessBroadcast(room) {
+  const payload = 'data: ' + JSON.stringify(chessView(room)) + '\n\n';
+  room.clients.forEach((res) => { try { res.write(payload); } catch (e) {} });
+}
+function chessSeat(room, pid) {
+  if (room.white && room.white.id === pid) { room.white.lastSeen = Date.now(); return 'w'; }
+  if (room.black && room.black.id === pid) { room.black.lastSeen = Date.now(); return 'b'; }
+  return '';
+}
+function findChess(req, res) {
+  const room = chessRooms.get(String(req.params.code || '').toUpperCase());
+  if (!room) { res.status(404).json({ error: 'That code does not match a game' }); return null; }
+  room.touched = Date.now();
+  return room;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of chessRooms) {
+    if (now - room.touched > ROOM_IDLE_MS) { room.clients.forEach((r) => { try { r.end(); } catch (e) {} }); chessRooms.delete(code); }
+  }
+}, 60e3).unref();
+
+app.post('/api/chess', (req, res) => {
+  if (!limit('chess:' + req.ip, 30, 10 * 60e3)) return res.status(429).json({ error: 'Slow down a moment' });
+  let code;
+  do { code = newCode(); } while (chessRooms.has(code));
+  const pid = crypto.randomBytes(12).toString('hex');
+  const want = (req.body && req.body.color) || 'random';
+  const color = want === 'white' ? 'w' : want === 'black' ? 'b' : (crypto.randomInt(2) ? 'w' : 'b');
+  const me = { id: pid, name: cleanName(req.body && req.body.name, req.user ? req.user.username : 'Player'), lastSeen: Date.now() };
+  const room = { code, white: color === 'w' ? me : null, black: color === 'b' ? me : null, state: Chess.create(),
+    clients: [], touched: Date.now(), game: 1, result: '', reason: '', drawOffer: '', rematch: [] };
+  chessRooms.set(code, room);
+  res.json({ code, pid, color, state: chessView(room) });
+});
+
+app.post('/api/chess/:code/join', (req, res) => {
+  const room = findChess(req, res);
+  if (!room) return;
+  const pid = req.body && req.body.pid;
+  const already = pid && chessSeat(room, pid);
+  if (already) return res.json({ code: room.code, pid, color: already, state: chessView(room) });
+  const seat = !room.white ? 'w' : !room.black ? 'b' : '';
+  if (!seat) return res.status(409).json({ error: 'That game already has two players' });
+  const id = crypto.randomBytes(12).toString('hex');
+  const player = { id, name: cleanName(req.body && req.body.name, req.user ? req.user.username : 'Player'), lastSeen: Date.now() };
+  if (seat === 'w') room.white = player; else room.black = player;
+  chessBroadcast(room);
+  res.json({ code: room.code, pid: id, color: seat, state: chessView(room) });
+});
+
+app.get('/api/chess/:code/events', (req, res) => {
+  const room = findChess(req, res);
+  if (!room) return;
+  chessSeat(room, req.query.pid);
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders && res.flushHeaders();
+  res.write('retry: 2000\n\n');
+  res.write('data: ' + JSON.stringify(chessView(room)) + '\n\n');
+  room.clients.push(res);
+  const beat = setInterval(() => { chessSeat(room, req.query.pid); try { res.write(': ping\n\n'); } catch (e) {} }, 20e3);
+  req.on('close', () => { clearInterval(beat); room.clients = room.clients.filter((c) => c !== res); chessBroadcast(room); });
+  chessBroadcast(room);
+});
+
+app.post('/api/chess/:code/move', (req, res) => {
+  const room = findChess(req, res);
+  if (!room) return;
+  const { pid, uci } = req.body || {};
+  const seat = chessSeat(room, pid);
+  if (!seat) return res.status(403).json({ error: 'You are not playing in this game' });
+  if (room.result || Chess.status(room.state).over) return res.status(409).json({ error: 'The game is over' });
+  if (room.state.t !== seat) return res.status(409).json({ error: 'Not your turn' });
+  if (typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci) || !Chess.play(room.state, uci))
+    return res.status(400).json({ error: 'That move is not legal' });
+  room.drawOffer = '';
+  chessBroadcast(room);
+  res.json({ ok: true });
+});
+
+app.post('/api/chess/:code/:action(resign|draw|rematch)', (req, res) => {
+  const room = findChess(req, res);
+  if (!room) return;
+  const seat = chessSeat(room, req.body && req.body.pid);
+  if (!seat) return res.status(403).json({ error: 'You are not playing in this game' });
+  const over = room.result || Chess.status(room.state).over;
+  const action = req.params.action;
+  if (action === 'resign' && !over) {
+    room.result = seat === 'w' ? '0-1' : '1-0'; room.reason = 'resignation';
+  } else if (action === 'draw' && !over) {
+    if (room.drawOffer && room.drawOffer !== seat) { room.result = '1/2-1/2'; room.reason = 'agreement'; room.drawOffer = ''; }
+    else room.drawOffer = seat;
+  } else if (action === 'rematch' && over) {
+    if (!room.rematch.includes(seat)) room.rematch.push(seat);
+    if (room.rematch.length === 2) {
+      [room.white, room.black] = [room.black, room.white];   // swap colours
+      room.state = Chess.create(); room.result = ''; room.reason = ''; room.drawOffer = ''; room.rematch = []; room.game++;
+    }
+  }
+  chessBroadcast(room);
+  res.json({ ok: true });
+});
+
 const PUB = path.join(__dirname, 'public');
 
 app.get('/play', (req, res) => res.sendFile(path.join(PUB, 'play.html')));

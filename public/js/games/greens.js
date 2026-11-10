@@ -100,7 +100,8 @@
 .gr-wind svg { width:16px; height:16px; transition: transform .6s var(--ease); }
 .gr-stage { position:relative; border-radius:20px; overflow:hidden; border:1px solid var(--border); background:#1f4a25;
   touch-action:none; user-select:none; cursor: crosshair; }
-.gr-stage canvas { display:block; width:100%; height:auto; }
+.gr-stage canvas { display:block; width:auto; height:auto; max-width:100%; max-height:calc(100vh - 400px); min-height:360px; margin:0 auto; aspect-ratio: 440 / 600; }
+.bb-fs .gr-stage canvas { max-height:calc(100vh - 360px); }
 .gr-banner { position:absolute; left:50%; top:16px; transform:translateX(-50%); padding:8px 16px; border-radius:99px;
   background: rgba(8,10,12,.72); color:#fff; font-weight:700; font-size:.88rem; backdrop-filter: blur(8px);
   white-space:nowrap; pointer-events:none; transition: opacity .3s var(--ease); }
@@ -139,11 +140,26 @@
 
   BBG.greens = {
     makeCourse, lieAt, centerX,
+    levels: {
+      normal: { label: 'Normal', r1: RING_1, r2: RING_2, wind: 1, spread: 1, meter: 1500, note: 'Standard rings and wind' },
+      hard:   { label: 'Hard',   r1: 2.4, r2: 7, wind: 1.6, spread: 1.2, meter: 1200, note: 'Smaller rings, stronger wind' },
+      expert: { label: 'Expert', r1: 1.6, r2: 5.5, wind: 2.2, spread: 1.45, meter: 950, note: 'Tiny rings, gusty wind, a fast meter' },
+    },
+
+    // Daily: everyone's round against par.
+    answers(score, detail) { const d = score - ((detail && detail.par) || score); return [d === 0 ? 'e' : (d > 0 ? '+' : '') + d]; },
+    statsHtml(pick, score, detail) {
+      const row = pick(0), num = (k) => (k === 'e' ? 0 : Number(k));
+      const rows = Object.keys(row).sort((a, b) => num(a) - num(b)).map((k) => [k === 'e' ? 'Even' : k, row[k]]);
+      const d = score - ((detail && detail.par) || score);
+      return BB.distBars(rows, d === 0 ? 'Even' : (d > 0 ? '+' : '') + d, { title: 'Scores to par, everyone today' });
+    },
 
     mount(root, opts, hooks) {
       css();
       hooks = hooks || {};
       const course = makeCourse(opts.seed);
+      const G = this.levels[opts.level] || this.levels.normal;
       const shotRand = BB.rng('greens-shots:' + opts.seed + ':' + Math.random());
       const card = [];       // strokes per hole
       let hi = 0, h = null, ball = null, prev = null, strokes = 0, lie = 'tee';
@@ -253,7 +269,7 @@
           `<span class="gr-pill">Par <b>${h.par}</b> · ${h.L} yd</span>` +
           `<span class="gr-pill">Shots <b>${strokes}</b></span>` +
           `<span class="gr-pill">Round <b>${card.length ? toPar(total - parSoFar) : 'E'}</b></span>` +
-          `<span class="gr-pill gr-wind" title="Wind"><svg viewBox="0 0 24 24" style="transform:rotate(${-wa}deg)" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V4M6 10l6-6 6 6"/></svg>${h.wind.mph} mph</span>` +
+          `<span class="gr-pill gr-wind" title="Wind"><svg viewBox="0 0 24 24" style="transform:rotate(${-wa}deg)" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V4M6 10l6-6 6 6"/></svg>${Math.round(h.wind.mph * G.wind)} mph</span>` +
           `<span class="gr-pill">${lie === 'tee' ? 'Tee' : lie[0].toUpperCase() + lie.slice(1)} · ${Math.round(toPin())} yd to pin</span>`;
         $('gr-club').textContent = CLUBS[clubIdx].name + ' · ' + clubMax() + ' yd';
       }
@@ -319,8 +335,8 @@
         // green and its rings
         ctx.beginPath(); ctx.arc(SX(h.gx), SY(h.L), h.greenR * cam.s, 0, Math.PI * 2); ctx.fillStyle = '#7dca6f'; ctx.fill();
         ctx.lineWidth = 1.4;
-        ctx.beginPath(); ctx.arc(SX(h.cup.x), SY(h.cup.y), RING_2 * cam.s, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.stroke();
-        ctx.beginPath(); ctx.arc(SX(h.cup.x), SY(h.cup.y), RING_1 * cam.s, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(242,207,85,.95)'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(SX(h.cup.x), SY(h.cup.y), G.r2 * cam.s, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(SX(h.cup.x), SY(h.cup.y), G.r1 * cam.s, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(242,207,85,.95)'; ctx.stroke();
         // trees
         h.trees.forEach((t) => {
           ctx.beginPath(); ctx.arc(SX(t.x), SY(t.y), t.r * cam.s, 0, Math.PI * 2);
@@ -373,7 +389,7 @@
         const t = viewTarget(false);
         cam.x += (t.x - cam.x) * 0.08; cam.y += (t.y - cam.y) * 0.08; cam.s += (t.s - cam.s) * 0.08;
         if (state === 'meter') {
-          const ph = ((now - meterT0) / 1500) % 2;
+          const ph = ((now - meterT0) / G.meter) % 2;
           power = ph < 1 ? ph : 2 - ph;
           $('gr-fill').style.transform = 'scaleX(' + power + ')';
           $('gr-mt').textContent = Math.round(clubMax() * power) + ' YD';
@@ -426,9 +442,9 @@
         BB.sfx.swing();
         strokes++;
         const carry = clubMax() * Math.max(0.04, p);
-        const spread = (1.4 + 4.2 * p) * (SPREAD[lie] || 1);
+        const spread = (1.4 + 4.2 * p) * (SPREAD[lie] || 1) * G.spread;
         const side = gauss(shotRand) * spread;
-        const drift = h.wind.mph * 0.42 * (carry / 100);
+        const drift = h.wind.mph * G.wind * 0.42 * (carry / 100);
         const land = {
           x: ball.x + Math.sin(aim) * carry + Math.cos(aim) * side + Math.sin(h.wind.ang) * drift,
           y: ball.y + Math.cos(aim) * carry - Math.sin(aim) * side + Math.cos(h.wind.ang) * drift,
@@ -476,7 +492,7 @@
         if (dist(ball, h.cup) <= 0.9) return holeOut(0, 'In the hole!');
         if (lie === 'green') {
           const d = dist(ball, h.cup);
-          const putts = d <= RING_1 ? 1 : d <= RING_2 ? 2 : 3;
+          const putts = d <= G.r1 ? 1 : d <= G.r2 ? 2 : 3;
           return putt(putts);
         }
         if (lie === 'bunker') banner('In the bunker');

@@ -29,7 +29,7 @@ const DATA_EPOCH = 2;
 /* JSON file backend                                                 */
 /* ---------------------------------------------------------------- */
 function jsonBackend() {
-  let db = { users: [], sessions: [], requests: [], dailyStats: {}, plays: {} };
+  let db = { users: [], sessions: [], requests: [], dailyStats: {}, plays: {}, answers: {} };
   let timer = null;
 
   function load() {
@@ -43,6 +43,7 @@ function jsonBackend() {
     }
     db.dailyStats = db.dailyStats || {};
     db.plays = db.plays || {};
+    db.answers = db.answers || {};
     if ((db.epoch || 1) < DATA_EPOCH) {
       Object.assign(db, { users: [], sessions: [], dailyStats: {}, plays: {}, epoch: DATA_EPOCH });
       console.log(`Data epoch ${DATA_EPOCH}: accounts and scores cleared for a fresh start.`);
@@ -110,6 +111,21 @@ function jsonBackend() {
     requests: {
       async add(r) { db.requests.push(r); save(); return r; },
       async all() { return db.requests; },
+    },
+
+    answers: {
+      async bump(key, answer) {
+        const row = (db.answers[key] = db.answers[key] || {});
+        row[answer] = (row[answer] || 0) + 1;
+        const keys = Object.keys(db.answers);
+        if (keys.length > 3000) keys.slice(0, keys.length - 3000).forEach((k) => delete db.answers[k]);
+        save();
+      },
+      async get(keys) {
+        const out = {};
+        for (const k of keys) out[k] = { ...(db.answers[k] || {}) };
+        return out;
+      },
     },
 
     plays: {
@@ -215,6 +231,12 @@ function pgBackend(url, directUrl) {
           key   TEXT PRIMARY KEY,
           tries JSONB NOT NULL DEFAULT '[0,0,0,0,0,0]'::jsonb,
           fail  INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS answer_stats (
+          key    TEXT NOT NULL,
+          answer TEXT NOT NULL,
+          count  INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (key, answer)
         );
         CREATE TABLE IF NOT EXISTS meta (
           key   TEXT PRIMARY KEY,
@@ -373,6 +395,22 @@ function pgBackend(url, directUrl) {
       },
     },
 
+    answers: {
+      async bump(key, answer) {
+        await pool.query(
+          `INSERT INTO answer_stats (key, answer, count) VALUES ($1, $2, 1)
+           ON CONFLICT (key, answer) DO UPDATE SET count = answer_stats.count + 1`, [key, answer]);
+      },
+      async get(keys) {
+        const out = {};
+        for (const k of keys) out[k] = {};
+        if (!keys.length) return out;
+        const { rows } = await pool.query('SELECT key, answer, count FROM answer_stats WHERE key = ANY($1)', [keys]);
+        for (const r of rows) out[r.key][r.answer] = Number(r.count);
+        return out;
+      },
+    },
+
     plays: {
       async bump(game) {
         await pool.query(
@@ -431,7 +469,10 @@ module.exports = {
   get store() { return store; },
 
   async open() {
-    const url = process.env.DATABASE_URL;
+    // `node server.js --file-db` (or BB_FILE_DB=1) keeps local testing off the
+    // real database even when .env has one.
+    const local = process.argv.includes('--file-db') || process.env.BB_FILE_DB === '1';
+    const url = local ? '' : process.env.DATABASE_URL;
     if (url) {
       try {
         store = pgBackend(url, process.env.DATABASE_URL_UNPOOLED);

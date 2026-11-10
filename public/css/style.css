@@ -295,7 +295,21 @@ p { margin: 0; }
    Game grid — ranked cards with a pointer-tracked glow border
    (technique ported from 21st.dev "Glow Card Grid")
    ============================================================ */
-.game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 16px; }
+/* The most played game gets a feature tile, sized so every row comes out full:
+   2x2 in four columns, a full-width banner in three or two. */
+.game-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; grid-auto-flow: dense; }
+.game-grid > .gcard:first-child { grid-column: span 2; grid-row: span 2; }
+.game-grid > .gcard:first-child .gcard-stage { aspect-ratio: auto; flex: 1 1 auto; min-height: 260px; }
+.game-grid > .gcard:first-child .gcard-body { flex: none; }
+.game-grid > .gcard:first-child .gcard-body p { font-size: 1rem; }
+.game-grid > .gcard:first-child .gcard-foot h3, .game-grid > .gcard:first-child h3 { font-size: 1.6rem; }
+@media (max-width: 1120px) {
+  .game-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .game-grid > .gcard:first-child { grid-column: 1 / -1; grid-row: span 1; }
+  .game-grid > .gcard:first-child .gcard-stage { aspect-ratio: 21 / 8; flex: none; min-height: 0; }
+}
+@media (max-width: 860px) { .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .game-grid > .gcard:first-child .gcard-stage { aspect-ratio: 16 / 8; } }
+@media (max-width: 580px) { .game-grid { grid-template-columns: 1fr; } .game-grid > .gcard:first-child .gcard-stage { aspect-ratio: 16 / 10; } }
 
 .gcard {
   --px: -10; --py: -10;
@@ -805,3 +819,31 @@ textarea.input { resize: vertical; min-height: 110px; }
 
 .motion-toggle { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: .82rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .motion-toggle:hover { color: var(--text); }
+
+/* ---------- Full screen games ---------- */
+.fs-btn { gap: 6px; }
+.bb-fs .site-header, .bb-fs .site-footer, .bb-fs footer, .bb-fs header.site-header, .bb-fs .back-link { display: none !important; }
+.bb-fs .game-shell { padding: 14px 0 20px; min-height: 100vh; }
+/* Full screen is for playing: drop the menus and the blurb, keep the live stats. */
+.bb-fs .mode-bar, .bb-fs .game-head-main p, .bb-fs .game-head .glyph { display: none !important; }
+.bb-fs .game-head { margin-bottom: 10px; }
+.bb-fs .stat-row { margin-bottom: 12px; }
+.bb-fs body { background: var(--bg); }
+@media (max-width: 640px) { .fs-btn span { display: none; } }
+
+/* ---------- How everyone answered ---------- */
+.everyone { margin-top: 26px; text-align: left; }
+.dist { margin-top: 16px; text-align: left; }
+.dist-row { display: grid; grid-template-columns: minmax(64px, 34%) 1fr 42px; gap: 8px; align-items: center; font-size: .84rem;
+  padding: 3px 0; animation: distIn .45s var(--ease) both; }
+@keyframes distIn { from { opacity: 0; transform: translateX(-8px); } }
+.dist-row .dl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.dist-row .db { height: 16px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.dist-row .db i { display: block; height: 100%; background: var(--grey, #6b6b74); border-radius: 4px; animation: distGrow .8s var(--ease) both; transform-origin: left; }
+@keyframes distGrow { from { transform: scaleX(0); } }
+.dist-row.on .db i { background: var(--tile, var(--green)); }
+.dist-row.on .dl { color: var(--text); font-weight: 700; }
+.dist-row .dp { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.dist-n { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+.dist-q { font-weight: 700; font-size: .88rem; margin-top: 14px; }
+.dist-you { font-size: .8rem; color: var(--muted); }

@@ -23,6 +23,7 @@ Then open http://localhost:3000
 | Wordle | daily, endless, friends | longest win streak | no |
 | Pricedle | daily, endless, friends | guesses to land within 5% of the price | yes |
 | Daily Greens | daily, endless, friends | strokes over nine holes | yes |
+| Chess | computer, online friend, pass and play | highest bot beaten (12 is Ben) | no |
 | Connections | daily, endless | total wins | no |
 | Typing Speed | endless, friends | words per minute | no |
 | Hangman | daily, endless | longest win streak | no |
@@ -42,6 +43,25 @@ real play counts from `/api/popularity`. A play is counted at most once every
 how to play, your best, and a button for each mode. The server fills in the title,
 description and share image for each one so links unfurl properly.
 
+### Chess
+
+Full rules (castling, en passant, promotion, check, mate, stalemate, fifty moves,
+threefold repetition, insufficient material) live in `public/js/games/chess-engine.js`,
+which runs in the page, in a Web Worker for the computer's thinking, and on the server,
+where it checks every online move. Twelve opponents, from Pip (random moves) to Ben, the
+final boss (opening book, iterative deepening, about 3.5 seconds a move). Every opponent
+is open to everyone. Online games use `/api/chess` with a four-letter code.
+
+### Difficulty
+
+Wordle, Connections, Hangman and Typing have their own difficulty chips. Brillion,
+Pricedle and Daily Greens add Hard and Expert in endless mode; the daily stays on normal
+so everyone's results compare.
+
+### Full screen
+
+Every game page has a Full screen button. The game also scales up to fit large screens.
+
 ### Daily and endless
 
 Daily gives everyone the same puzzle once a day and locks with a countdown to midnight
@@ -49,6 +69,9 @@ once you finish. Endless never stops. Pick with `?mode=daily` or `?mode=endless`
 (Wordle, Connections and Hangman also take their older `?mode=infinite`).
 
 Wordle also takes `?len=3`, `4`, `5` or `6`. Each length has its own daily puzzle.
+
+After a daily Brillion, Pricedle or Daily Greens, the result shows how everyone else
+answered (`/api/daily-answers`, stored in the `answer_stats` table).
 
 Daily puzzles come from a seeded shuffle keyed to the day number (30 September 2026 is
 #1), so every device works out the same answer with no server involved.
@@ -129,6 +152,11 @@ SMTP_PASS=your-app-password
 
 For Gmail you need an App Password from your Google Account security settings, not your
 normal password. Read every request at `/api/requests?key=YOUR_ADMIN_KEY`.
+
+## Testing locally
+
+`node server.js --file-db` keeps everything in `data/db.json` even when `.env` has the
+real `DATABASE_URL`, so local testing never touches live accounts.
 
 ## Where the data lives
 

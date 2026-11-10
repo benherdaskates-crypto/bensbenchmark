@@ -58,7 +58,17 @@
   var P = new URLSearchParams(location.search);
   var LEN = [3, 4, 5, 6].indexOf(Number(P.get('len'))) > -1 ? Number(P.get('len')) : 5;
   var MODE = /^(infinite|endless)$/.test(P.get('mode')) ? 'infinite' : 'daily';
-  var ROWS = 6;
+  /* Hard: letters you have uncovered must be used again. Expert: that, in five guesses. */
+  var LEVELS = {
+    normal: { label: 'Normal', rows: 6, strict: false },
+    hard:   { label: 'Hard',   rows: 6, strict: true },
+    expert: { label: 'Expert', rows: 5, strict: true }
+  };
+  var DIFF = LEVELS[P.get('diff')] ? P.get('diff') : BB.lsGet('bb_wordle_diff', 'normal');
+  if (!LEVELS[DIFF]) DIFF = 'normal';
+  BB.lsSet('bb_wordle_diff', DIFF);
+  var ROWS = LEVELS[DIFF].rows;
+  var Q = '&diff=' + DIFF;
 
   var store = BB.lsGet('bb_wordle', { streak: 0, played: 0, won: 0 });
   if (!store.dist) store.dist = [0, 0, 0, 0, 0, 0];
@@ -72,14 +82,21 @@
     '<div class="mode-bar">' +
       '<span class="lbl">Mode</span>' +
       '<div class="chips">' +
-        '<a class="chip' + (MODE === 'daily' ? ' on' : '') + '" href="?mode=daily&len=' + LEN + '">Daily</a>' +
-        '<a class="chip' + (MODE === 'infinite' ? ' on' : '') + '" href="?mode=infinite&len=' + LEN + '">Endless</a>' +
+        '<a class="chip' + (MODE === 'daily' ? ' on' : '') + '" href="?mode=daily&len=' + LEN + Q + '">Daily</a>' +
+        '<a class="chip' + (MODE === 'infinite' ? ' on' : '') + '" href="?mode=infinite&len=' + LEN + Q + '">Endless</a>' +
       '</div>' +
       '<span class="sep"></span>' +
       '<span class="lbl">Letters</span>' +
       '<div class="chips">' +
         [3, 4, 5, 6].map(function (n) {
-          return '<a class="chip' + (n === LEN ? ' on' : '') + '" href="?mode=' + MODE + '&len=' + n + '">' + n + '</a>';
+          return '<a class="chip' + (n === LEN ? ' on' : '') + '" href="?mode=' + MODE + '&len=' + n + Q + '">' + n + '</a>';
+        }).join('') +
+      '</div>' +
+      '<span class="sep"></span>' +
+      '<span class="lbl">Difficulty</span>' +
+      '<div class="chips">' +
+        Object.keys(LEVELS).map(function (k) {
+          return '<a class="chip' + (k === DIFF ? ' on' : '') + '" href="?mode=' + MODE + '&len=' + LEN + '&diff=' + k + '">' + LEVELS[k].label + '</a>';
         }).join('') +
       '</div>' +
     '</div>' +
@@ -269,6 +286,17 @@
     var word = guesses[row] || '';
     if (word.length < LEN) return bounce('Not enough letters');
     if (!BBDATA.isValidFor(LEN, word)) return bounce('Not a word');
+    if (LEVELS[DIFF].strict) {
+      for (var pr = 0; pr < row; pr++) {
+        var g = guesses[pr], pm = score(g, answer);
+        for (var pi = 0; pi < LEN; pi++) {
+          if (pm[pi] === 'correct' && word[pi] !== g[pi]) return bounce('Letter ' + (pi + 1) + ' must be ' + g[pi].toUpperCase());
+        }
+        for (pi = 0; pi < LEN; pi++) {
+          if (pm[pi] === 'present' && word.indexOf(g[pi]) < 0) return bounce('Guess must contain ' + g[pi].toUpperCase());
+        }
+      }
+    }
 
     var marks = score(word, answer);
     var rankOf = { correct: 3, present: 2, absent: 1 };

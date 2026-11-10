@@ -76,6 +76,11 @@
   }
 
   BBG.pricedle = {
+    levels: {
+      normal: { label: 'Normal', guesses: 6, win: 0.05, close: 0.25, heat: true, note: '6 guesses, within 5%' },
+      hard:   { label: 'Hard',   guesses: 5, win: 0.03, close: 0.15, heat: true, note: '5 guesses, within 3%' },
+      expert: { label: 'Expert', guesses: 4, win: 0.02, close: 0.10, heat: false, note: '4 guesses, within 2%, no hot or cold meter' },
+    },
     pick(seed, index) {
       if (Number.isInteger(index)) return ITEMS[index % ITEMS.length];
       return BB.pick(BB.rng('pricedle:' + seed), ITEMS);
@@ -85,6 +90,8 @@
       css();
       hooks = hooks || {};
       const item = this.pick(opts.seed, opts.index);
+      const L = this.levels[opts.level] || this.levels.normal;
+      const MAX = L.guesses;
       const [name, size, price, art, aisle] = item;
       const guesses = [];
       let over = false;
@@ -97,13 +104,13 @@
             <div class="pd-size">${size}</div>
             <div class="pd-aisle"><span class="tag">${aisle}</span></div>
             <div class="pd-answer" id="pd-ans" aria-live="polite">$ ? ? . ? ?</div>
-            <div class="pd-heat" aria-hidden="true"><i id="pd-heat"></i></div>
-            <div class="pd-heat-l" id="pd-heat-l">Make a guess</div>
+            ${L.heat ? `<div class="pd-heat" aria-hidden="true"><i id="pd-heat"></i></div>
+            <div class="pd-heat-l" id="pd-heat-l">Make a guess</div>` : ''}
           </div>
           <div>
             <div class="pd-rcpt">
               <div class="pd-rh">THE WAREHOUSE</div>
-              <div class="pd-rs">Member receipt · guess within 5%</div>
+              <div class="pd-rs">Member receipt · guess within ${Math.round(L.win * 100)}%</div>
               <div class="pd-rule"></div>
               <div id="pd-lines"></div>
               <div class="pd-rule"></div>
@@ -139,6 +146,7 @@
       function heat(diff) {
         const warm = Math.max(0, 1 - Math.min(diff, 1));
         const bar = $('pd-heat'), label = $('pd-heat-l');
+        if (!bar) return;
         bar.style.width = Math.max(6, warm * 100) + '%';
         bar.style.backgroundColor = `hsl(${Math.round(215 - warm * 215)}, 75%, 55%)`;
         label.textContent = diff <= 0.05 ? 'Spot on' : diff <= 0.1 ? 'Burning' : diff <= 0.25 ? 'Hot' : diff <= 0.5 ? 'Warm' : diff <= 1 ? 'Cold' : 'Freezing';
@@ -168,8 +176,8 @@
         if (over) return;
         const diff = Math.abs(v - price) / price;
         let cls, label;
-        if (diff <= 0.05) { cls = 'win'; label = 'Got it'; }
-        else if (diff <= 0.25) { cls = 'close'; label = (v < price ? 'Close ↑' : 'Close ↓'); }
+        if (diff <= L.win) { cls = 'win'; label = 'Got it'; }
+        else if (diff <= L.close) { cls = 'close'; label = (v < price ? 'Close ↑' : 'Close ↓'); }
         else if (v < price) { cls = 'up'; label = 'Higher ↑'; }
         else { cls = 'down'; label = 'Lower ↓'; }
         guesses.push({ v, cls, label });
@@ -199,7 +207,7 @@
           if (!won) BB.sfx.lose();
           setTimeout(() => hooks.finish && hooks.finish(won ? guesses.length : 7, { won, price, guesses: guesses.map((g) => g.v), name }), 1100);
         } else {
-          $('pd-msg').textContent = cls === 'close' ? 'Close. Within 25%.' : '';
+          $('pd-msg').textContent = cls === 'close' ? 'Close. Within ' + Math.round(L.close * 100) + '%.' : '';
         }
       }
 
@@ -219,6 +227,14 @@
       paint(false);
       setTimeout(() => input.focus(), 80);
       return function teardown() { over = true; };
+    },
+
+    // Daily: how many guesses everyone needed.
+    answers(score) { return [score <= MAX ? String(score) : 'x']; },
+    statsHtml(pick, score) {
+      const row = pick(0);
+      const rows = Array.from({ length: MAX }, (_, i) => [String(i + 1), row[String(i + 1)] || 0]).concat([['Missed', row.x || 0]]);
+      return BB.distBars(rows, score <= MAX ? String(score) : 'Missed', { title: 'Guesses, everyone today' });
     },
 
     summary(score, detail) {

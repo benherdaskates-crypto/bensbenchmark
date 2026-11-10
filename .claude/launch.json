@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "bensbenchmark",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["start"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js", "--file-db"],
       "port": 3000
     }
   ]

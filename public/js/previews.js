@@ -19,6 +19,44 @@
 .pv-col { display:flex; flex-direction:column; gap:calc(5px*var(--u)); }
 .pv-lbl { font-size:calc(10.5px*var(--u)); font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
 
+/* chess */
+.pv-chess { --s: calc(23px*var(--u)); display:grid; grid-template-columns:repeat(8, var(--s)); grid-template-rows:repeat(8, var(--s));
+  border-radius:calc(6px*var(--u)); overflow:hidden; position:relative; background:#b58863;
+  box-shadow:0 calc(14px*var(--u)) calc(34px*var(--u)) rgba(0,0,0,.45), 0 0 0 calc(2px*var(--u)) rgba(255,255,255,.06);
+  animation: pvBoard 7s linear infinite both; }
+@keyframes pvBoard { 0%, 39% { transform:none; } 40% { transform:translate(calc(-4px*var(--u)), calc(2px*var(--u))) rotate(-.6deg); }
+  42% { transform:translate(calc(4px*var(--u)), calc(-2px*var(--u))) rotate(.6deg); } 44% { transform:translate(calc(-2px*var(--u)),0); } 46%, 100% { transform:none; } }
+.pv-chess i { display:block; }
+.pv-chess i.l { background:#f0d9b5; } .pv-chess i.d { background:#b58863; }
+.pv-chess b { position:absolute; width:var(--s); height:var(--s); display:grid; place-items:center;
+  font-size:calc(19px*var(--u)); line-height:1; font-weight:400; font-family:'Segoe UI Symbol','Noto Sans Symbols 2',serif; }
+.pv-chess b.w { color:#fff; text-shadow:0 0 1px #000, 0 0 1px #000, 0 1px 3px rgba(0,0,0,.55); }
+.pv-chess b.k { color:#141414; }
+.pv-chess .mover { animation: pvQueen 7s cubic-bezier(.3,.7,.3,1) infinite both; z-index:3; }
+@keyframes pvQueen { 0%, 20% { transform: translate(0,0) scale(1); filter:none; }
+  27% { transform: translate(0, calc(-3px*var(--u))) scale(1.35); filter: drop-shadow(0 calc(8px*var(--u)) calc(6px*var(--u)) rgba(0,0,0,.5)); }
+  38% { transform: translate(calc(-2*var(--s)), calc(-2*var(--s))) scale(1.35); filter: drop-shadow(0 calc(8px*var(--u)) calc(6px*var(--u)) rgba(0,0,0,.5)); }
+  41%, 88% { transform: translate(calc(-2*var(--s)), calc(-2*var(--s))) scale(1); filter:none; } 96%, 100% { transform: translate(0,0); } }
+.pv-chess .glow { animation: pvGlow 7s ease-in-out infinite both; }
+@keyframes pvGlow { 0%, 8% { filter:none; } 14%, 20% { filter: drop-shadow(0 0 calc(5px*var(--u)) #ffd23f); } 30%, 100% { filter:none; } }
+.pv-chess .gone { animation: pvGone 7s cubic-bezier(.25,.6,.4,1) infinite both; }
+@keyframes pvGone { 0%, 38% { opacity:1; transform:none; } 39% { transform: translate(calc(6px*var(--u)), calc(-14px*var(--u))) rotate(120deg); opacity:1; }
+  50% { transform: translate(calc(40px*var(--u)), calc(60px*var(--u))) rotate(540deg) scale(.4); opacity:0; } 96% { opacity:0; transform:none; } 100% { opacity:1; } }
+.pv-chess .boom { position:absolute; width:var(--s); height:var(--s); border-radius:50%; border:calc(3px*var(--u)) solid #ffd23f; opacity:0;
+  animation: pvBoom 7s ease-out infinite both; z-index:4; }
+@keyframes pvBoom { 0%, 38% { opacity:0; transform:scale(.2); } 39% { opacity:1; transform:scale(.4); } 47% { opacity:0; transform:scale(2.6); } 100% { opacity:0; } }
+.pv-chess .mate { position:absolute; width:var(--s); height:var(--s); background:radial-gradient(circle, #ff2a2a, rgba(255,42,42,.4) 60%, transparent 80%); opacity:0;
+  animation: pvMate 7s linear infinite both; }
+@keyframes pvMate { 0%, 44% { opacity:0; } 47%, 52%, 57%, 62% { opacity:.95; } 49.5%, 54.5%, 59.5% { opacity:.4; } 64%, 86% { opacity:.85; } 92%, 100% { opacity:0; } }
+.pv-chess .king { animation: pvTopple 7s cubic-bezier(.5,0,.7,1.4) infinite both; transform-origin: 50% 85%; }
+@keyframes pvTopple { 0%, 52% { transform:none; } 56% { transform: rotate(-14deg) translateY(calc(-2px*var(--u))); } 63%, 88% { transform: rotate(94deg) translateY(calc(2px*var(--u))); } 95%, 100% { transform:none; } }
+.pv-chess .banner { position:absolute; left:-6%; right:-6%; top:50%; z-index:6; text-align:center; color:#fff; font-family:var(--font-display);
+  font-weight:900; letter-spacing:.14em; font-size:calc(19px*var(--u)); padding:calc(5px*var(--u)) 0; transform:translateY(-50%) scaleX(0);
+  background:linear-gradient(90deg, transparent, rgba(170,20,20,.93) 12%, rgba(170,20,20,.93) 88%, transparent);
+  text-shadow:0 calc(2px*var(--u)) calc(8px*var(--u)) rgba(0,0,0,.5); animation: pvBanner 7s cubic-bezier(.2,1.4,.4,1) infinite both; }
+@keyframes pvBanner { 0%, 62% { transform:translateY(-50%) scaleX(0) scaleY(2); opacity:0; } 67% { transform:translateY(-50%) scaleX(1.08) scaleY(.9); opacity:1; }
+  70%, 87% { transform:translateY(-50%) scale(1); opacity:1; } 92%, 100% { transform:translateY(-50%) scaleX(0); opacity:0; } }
+
 /* wordle */
 .pv-wordle .pv-tile { animation: pvFlip 7.2s var(--ease) infinite both; animation-delay: var(--dl); }
 @keyframes pvFlip {
@@ -234,6 +272,18 @@
       return '<div class="pv-price"><div class="pv-prod">🥨</div><div class="pv-rcpt"><div class="pv-lbl" style="color:#666">Pretzels 3.5 lb</div>' +
         lines.map(([p, a, d], i) => `<div class="pv-rl${i === 2 ? ' w' : ''}" style="--dl:${d}s"><span>${p}</span><span>${a}</span></div>`).join('') +
         '</div></div>';
+    },
+    chess() {
+      // A mating attack: the bishop lines up, the queen strikes f7, the king falls.
+      let sq = '';
+      for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) sq += `<i class="${(r + f) % 2 ? 'd' : 'l'}"></i>`;
+      const at = (f, r) => `left:calc(var(--s) * ${f});top:calc(var(--s) * ${r})`;
+      const W = [['♛', 7, 3, 'mover'], ['♝', 2, 4, 'glow'], ['♚', 4, 7], ['♟', 4, 4], ['♟', 3, 6], ['♟', 5, 6], ['♟', 6, 6], ['♜', 0, 7], ['♜', 7, 7], ['♞', 1, 7]];
+      const B = [['♚', 4, 0, 'king'], ['♛', 3, 0], ['♟', 5, 1, 'gone'], ['♟', 4, 3], ['♞', 2, 2], ['♞', 5, 2], ['♜', 0, 0], ['♜', 7, 0], ['♝', 2, 0], ['♟', 0, 1], ['♟', 1, 1], ['♟', 6, 1], ['♟', 7, 1]];
+      return '<div class="pv-in"><div class="pv-chess">' + sq + `<span class="mate" style="${at(4, 0)}"></span><span class="boom" style="${at(5, 1)}"></span>` +
+        W.map(([g, f, r, c]) => `<b class="w ${c || ''}" style="${at(f, r)}">${g}</b>`).join('') +
+        B.map(([g, f, r, c]) => `<b class="k ${c || ''}" style="${at(f, r)}">${g}</b>`).join('') +
+        '<span class="banner">CHECKMATE</span></div></div>';
     },
     greens() {
       return `<div class="pv-green" style="position:absolute;inset:0"><svg viewBox="0 0 300 190" preserveAspectRatio="xMidYMid slice" aria-hidden="true">

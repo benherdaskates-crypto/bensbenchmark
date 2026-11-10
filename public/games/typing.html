@@ -80,6 +80,16 @@
   var DURATIONS = [15, 30, 60];
   var urlDur = Number(new URLSearchParams(location.search).get('dur'));
   var duration = DURATIONS.indexOf(urlDur) > -1 ? urlDur : BB.lsGet('bb_type_dur', 60);
+  // Harder levels mix in capitals and punctuation, then numbers, symbols and long words.
+  var LEVELS = {
+    normal: { label: 'Normal', note: 'Plain lowercase words' },
+    hard:   { label: 'Hard',   note: 'Capitals and punctuation' },
+    expert: { label: 'Expert', note: 'Capitals, punctuation, numbers, symbols, long words' }
+  };
+  var urlDiff = new URLSearchParams(location.search).get('diff');
+  var DIFF = LEVELS[urlDiff] ? urlDiff : BB.lsGet('bb_type_diff', 'normal');
+  if (!LEVELS[DIFF]) DIFF = 'normal';
+  BB.lsSet('bb_type_diff', DIFF);
 
   var words = [], typed = [], wi = 0, ci = 0;
   var running = false, done = false, startTime = 0, timerId = null, tickId = null;
@@ -97,6 +107,10 @@
       { id: 'st-time', label: 'Time left', value: duration + 's' },
       { id: 'st-best', label: 'Best WPM', value: '—' }
     ]) + '</div>' +
+    '<div class="mode-bar"><span class="lbl">Difficulty</span><div class="chips">' +
+      Object.keys(LEVELS).map(function (k) {
+        return '<a class="chip' + (k === DIFF ? ' on' : '') + '" href="?diff=' + k + '&dur=' + duration + '" title="' + LEVELS[k].note + '">' + LEVELS[k].label + '</a>';
+      }).join('') + '</div></div>' +
     '<div class="board-area">' +
       '<div class="timebar"><i id="timefill"></i></div>' +
       '<div class="typebox" id="typebox">' +
@@ -116,7 +130,21 @@
 
   function pickWords(n) {
     var pool = BBDATA.TYPING_WORDS, out = [];
-    for (var i = 0; i < n; i++) out.push(pool[Math.floor(Math.random() * pool.length)]);
+    var long = pool.filter(function (w) { return w.length >= 7; });
+    var R = Math.random;
+    for (var i = 0; i < n; i++) {
+      var src = DIFF === 'expert' && long.length && R() < 0.4 ? long : pool;
+      var w = src[Math.floor(R() * src.length)];
+      if (DIFF !== 'normal') {
+        if (R() < 0.3) w = w[0].toUpperCase() + w.slice(1);
+        if (R() < 0.25) w += ',.!?;:'[Math.floor(R() * 6)];
+      }
+      if (DIFF === 'expert') {
+        if (R() < 0.12) w = String(Math.floor(R() * 9000) + 10);
+        else if (R() < 0.08) w = ['(' + w + ')', '"' + w + '"', w + '-' + pool[Math.floor(R() * pool.length)], '#' + w, w + '@', '$' + Math.floor(R() * 900 + 10)][Math.floor(R() * 6)];
+      }
+      out.push(w);
+    }
     return out;
   }
 
