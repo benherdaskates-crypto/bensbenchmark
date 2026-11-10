@@ -918,3 +918,32 @@ textarea.input { resize: vertical; min-height: 110px; }
 .ach-k { font-size: .66rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--tc, var(--pop)); }
 .ach-n { font-family: var(--font-display); font-weight: 800; font-size: 1.12rem; line-height: 1.15; margin-top: 2px; }
 .ach-d { font-size: .82rem; color: var(--text-2); margin-top: 1px; }
+
+/* ============================================================
+   The bar above every game: modes, daily banner and stats
+   ============================================================ */
+.mode-bar { gap: 8px; padding: 8px 10px; background: color-mix(in srgb, var(--surface) 88%, var(--tile, var(--pop)) 2%); }
+.mode-bar .lbl { padding: 5px 9px; border-radius: 8px; background: var(--surface-2); color: var(--text-2); font-size: .62rem; letter-spacing: .16em; }
+.mode-bar .chips { gap: 4px; }
+.mode-bar .chip { border-color: transparent; background: transparent; color: var(--text-2); font-weight: 600; }
+.mode-bar .chip:hover { background: var(--surface-2); color: var(--text); }
+.mode-bar .chip.on { background: var(--text); color: var(--bg); box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.mode-bar .sep { height: 22px; margin: 0 4px; }
+
+.daily-banner { position: relative; padding: 11px 14px 11px 54px; border: 1px solid var(--border); border-left: 1px solid var(--border);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--tile, var(--pop)) 14%, var(--surface)), var(--surface) 60%); }
+.daily-banner::before { content: ""; position: absolute; left: 12px; top: 50%; width: 30px; height: 30px; transform: translateY(-50%); border-radius: 9px;
+  background: var(--tile, var(--pop)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round'%3E%3Crect x='4' y='5' width='16' height='15' rx='2.5'/%3E%3Cpath d='M4 10h16M9 3v4M15 3v4'/%3E%3C/svg%3E") center/18px no-repeat;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--tile, var(--pop)) 40%, transparent); }
+.daily-banner b { font-family: var(--font-display); font-size: .98rem; }
+.daily-banner .muted { color: var(--text-2); }
+.daily-banner .countdown-num { padding: 3px 9px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); }
+
+.stat-row { gap: 10px; }
+.stat-box { padding: 14px 10px 12px; text-align: center; border-radius: 14px; background: linear-gradient(180deg, var(--surface-2), var(--surface)); }
+.stat-box::after { left: 18%; right: 18%; height: 2px; border-radius: 0 0 4px 4px; opacity: 0;
+  background: var(--tile, var(--pop)); box-shadow: 0 0 12px var(--tile, var(--pop)); }
+.stat-box.hl::after { opacity: .9; }
+.stat-box .v { font-size: 1.5rem; line-height: 1.1; color: var(--text); }
+.stat-box.hl .v { color: var(--text); text-shadow: 0 0 18px color-mix(in srgb, var(--tile, var(--pop)) 45%, transparent); }
+.stat-box .k { margin-top: 4px; font-size: .64rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--text-2); }

@@ -114,7 +114,7 @@
       unit: 'points', dir: 'high', fmt: (v) => v + ' pts', tag: 'Trivia',
       blurb: 'Name something. The rarer the answer, the deeper you dive.',
       about: 'Seven prompts, a few seconds each. Anyone can name a dog breed, but the obvious answers barely move you. Dig for the strange ones and dive towards the bottom of the ocean.',
-      how: ['Type any answer that fits the prompt before the timer runs out.', 'Rare answers score up to 100 points. Common ones score 10.', 'A wrong answer only costs you three seconds, so keep guessing.'],
+      how: ['Type any answer that fits the prompt before the timer runs out.', 'Rare answers score up to 100 points. Common ones score 10.', 'A wrong answer costs nothing, so keep guessing until the clock runs out.'],
       modes: [M.daily('/games/brillion?mode=daily'), M.endless('/games/brillion?mode=endless', 'Seven fresh prompts every dive'), M.friends('brillion')],
     },
     wordle: {
