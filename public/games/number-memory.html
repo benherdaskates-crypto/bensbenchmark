@@ -117,7 +117,7 @@
     }
 
     BB.sfx.lose();
-    if (BB.fx) BB.fx.shake(stage, 9);
+    if (BB.fx) BB.fx.banner(stage, 'Not quite', { tone: 'lose', shake: 10, sub: 'Level ' + level });
     var score = level - 1;
     var compare = number.split('').map(function (d, i) {
       return '<i class="' + (given[i] === d ? 'ok' : 'no') + '">' + d + '</i>';

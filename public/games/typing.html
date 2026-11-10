@@ -251,6 +251,7 @@
     BB.setStat('st-time', '0s');
     var s = stats();
     BB.setStat('st-wpm', s.wpm);
+    if (BB.fx) BB.fx.banner(box, s.wpm + ' wpm', { tone: s.wpm >= 80 ? 'gold' : s.wpm >= 45 ? 'win' : 'info', sub: s.acc + '% accuracy' });
     BB.setStat('st-acc', s.acc + '%');
 
     var res = await BB.finish(KEY, s.wpm, { acc: s.acc, dur: duration });

@@ -19,26 +19,30 @@
 <script>try{var d=document.documentElement,m=localStorage.getItem('bb_motion');d.setAttribute('data-theme',localStorage.getItem('bb_theme')==='light'?'light':'dark');d.setAttribute('data-motion',m==='off'?'off':'on')}catch(e){}</script>
 <title>Wordle | BensBenchmark</title>
 <style>
-  .grid { display: grid; gap: 5px; width: min(330px, 84vw); margin: 0 auto; }
-  .grow { display: grid; grid-template-columns: repeat(var(--cols, 5), 1fr); gap: 5px; }
+  .grid { display: grid; gap: 6px; width: min(340px, 84vw); margin: 0 auto; }
+  .grow { display: grid; grid-template-columns: repeat(var(--cols, 5), 1fr); gap: 6px; perspective: 700px; }
   .tile {
     aspect-ratio: 1; display: grid; place-items: center;
     font-size: clamp(1.3rem, 6vw, 1.9rem); font-weight: 700; text-transform: uppercase;
-    border: 2px solid var(--border); border-radius: 4px;
-    background: var(--surface); color: var(--text);
-    user-select: none;
+    border: 2px solid var(--border); border-radius: 7px;
+    background: linear-gradient(180deg, var(--surface-2), var(--surface)); color: var(--text);
+    user-select: none; transform-style: preserve-3d;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
   }
-  .tile.filled { border-color: var(--border-mid); animation: pop .12s var(--ease); }
-  @keyframes pop { 50% { transform: scale(1.09); } }
-  .tile.flip { animation: flip .55s ease forwards; }
-  @keyframes flip { 0% { transform: rotateX(0); } 45%,55% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+  .tile.filled { border-color: var(--border-mid); animation: pop .22s cubic-bezier(.3,1.8,.5,1); box-shadow: 0 0 0 1px var(--border-mid), 0 6px 16px rgba(0,0,0,.25); }
+  @keyframes pop { 0% { transform: scale(.8); } 55% { transform: scale(1.16); } 100% { transform: scale(1); } }
+  .tile.flip { animation: flip .62s cubic-bezier(.45,.05,.35,1) forwards; }
+  @keyframes flip { 0% { transform: rotateX(0) scale(1); } 45%,55% { transform: rotateX(90deg) scale(1.08); } 100% { transform: rotateX(0) scale(1); } }
+  .tile.correct, .tile.present, .tile.absent { background-image: linear-gradient(180deg, rgba(255,255,255,.12), transparent 55%); }
+  .tile.correct { box-shadow: 0 0 18px color-mix(in srgb, var(--green) 55%, transparent); }
+  .grow.bad .tile.filled { border-color: #e5484d; box-shadow: 0 0 0 1px #e5484d, 0 0 14px rgba(229,72,77,.45); }
   .tile.correct { background: var(--green); border-color: var(--green); color: var(--on-green); }
   .tile.present { background: var(--yellow); border-color: var(--yellow); color: var(--on-yellow); }
   .tile.absent { background: var(--grey); border-color: var(--grey); color: var(--on-grey); }
-  .grow.shake { animation: shake .42s var(--ease-soft); }
-  @keyframes shake { 20%,60% { transform: translateX(-7px); } 40%,80% { transform: translateX(7px); } }
-  .tile.win { animation: jump .55s var(--ease); }
-  @keyframes jump { 0%,100% { transform: translateY(0); } 30% { transform: translateY(-20px); } 60% { transform: translateY(3px); } }
+  .grow.shake { animation: shake .5s var(--ease-soft); }
+  @keyframes shake { 15%,55% { transform: translateX(-11px); } 35%,75% { transform: translateX(11px); } 90% { transform: translateX(-4px); } }
+  .tile.win { animation: jump .7s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes jump { 0%,100% { transform: translateY(0) scale(1); } 35% { transform: translateY(-28px) scale(1.12) rotate(-4deg); } 65% { transform: translateY(4px) scale(.96); } }
 </style>
 </head>
 <body>
@@ -241,6 +245,8 @@
   }
 
   function press(k) {
+    var kb = document.querySelector('.key[data-k="' + k + '"]');
+    if (kb) { kb.classList.add('press'); setTimeout(function () { kb.classList.remove('press'); }, 110); }
     if (over) return;
     var cur = guesses[row] || '';
     if (k === 'back') {
@@ -278,8 +284,9 @@
     BB.sfx.bad();
     say(text);
     var r = document.getElementById('row-' + row);
-    r.classList.add('shake');
-    setTimeout(function () { r.classList.remove('shake'); }, 440);
+    r.classList.add('shake', 'bad');
+    if (BB.fx) BB.fx.flash('rgba(229,72,77,.5)', 0.12);
+    setTimeout(function () { r.classList.remove('shake', 'bad'); }, 600);
   }
 
   function submit() {
@@ -327,11 +334,16 @@
         }
         if (BB.fx) BB.fx.ring(document.getElementById('row-' + lastRow), '#6aaa64', { size: 380 });
         BB.sfx.win();
+        if (BB.fx) BB.fx.banner(gridEl, ['Genius', 'Magnificent', 'Impressive', 'Splendid', 'Great', 'Phew'][Math.min(5, lastRow)], { tone: 'win', sub: 'Solved in ' + (lastRow + 1) });
         end(true, lastRow + 1);
       }, LEN * 150 + 340);
     } else if (row >= ROWS) {
       over = true;
-      setTimeout(function () { BB.sfx.lose(); end(false, 0); }, LEN * 150 + 340);
+      setTimeout(function () {
+        BB.sfx.lose();
+        if (BB.fx) BB.fx.banner(gridEl, 'So close', { tone: 'lose', sub: 'It was ' + answer.toUpperCase(), shake: 8 });
+        end(false, 0);
+      }, LEN * 150 + 340);
     }
   }
 

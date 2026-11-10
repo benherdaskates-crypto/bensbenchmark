@@ -401,7 +401,8 @@
           gauge.classList.remove('pulse'); void gauge.offsetWidth; gauge.classList.add('pulse');
           if (pts >= 60) school(pts >= 100 ? 7 : pts >= 85 ? 4 : 2);
           if (pts >= 85) call('flash', hit.tier.color, 0.28);
-          if (pts >= 100) call('confetti', { colors: [hit.tier.color, '#7c5cff', '#5bc0eb', '#ffffff'], count: 120 });
+          if (pts >= 100) { call('confetti', { colors: [hit.tier.color, '#7c5cff', '#5bc0eb', '#ffffff'], count: 120 }); call('banner', root.querySelector('.br'), 'One in a Brillion', { tone: 'gold', hold: 1000 }); }
+          else if (pts >= 85) call('banner', root.querySelector('.br'), 'Abyss', { tone: '#5b3fcf', hold: 700 });
         }
         timer = setTimeout(() => {
           if (!alive) return;
@@ -419,6 +420,7 @@
             <span class="q">${r.q}</span><span class="a">${esc(r.answer) || '—'}</span>
             <span class="s" style="color:${r.tier ? r.tier.color : '#8aa'}">${r.pts}</span></div>`).join('')}</div>`;
         const big = main.querySelector('#br-big');
+        call('banner', root.querySelector('.br'), 'Dive complete', { tone: total >= 350 ? 'gold' : 'info', sub: total + ' points, ' + (total * 10).toLocaleString() + ' metres' });
         if (fx.count) fx.count(big, total, { duration: 1400, format: (n) => Math.round(n) + ' pts' }); else big.textContent = total + ' pts';
         school(total >= 400 ? 8 : 3);
         if (total >= 350) setTimeout(() => call('confetti', { colors: ['#5bc0eb', '#7c5cff', '#e05bd0', '#2fb3a1', '#ffffff'] }), 600);

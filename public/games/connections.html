@@ -32,7 +32,9 @@
     transition: transform .3s var(--ease), background .3s var(--ease), color .3s var(--ease), border-color .3s var(--ease);
   }
   .cword:hover { border-color: var(--border-mid); transform: translateY(-2px); }
-  .cword.on { background: var(--ink); color: var(--bg); border-color: var(--ink); transform: translateY(-2px) scale(.97); }
+  .cword.on { background: var(--ink); color: var(--bg); border-color: var(--ink); transform: translateY(-4px) scale(1.03);
+    box-shadow: 0 10px 24px rgba(0,0,0,.35), 0 0 0 3px color-mix(in srgb, var(--tile) 45%, transparent); animation: cpick .32s cubic-bezier(.3,1.8,.5,1); }
+  @keyframes cpick { 0% { transform: scale(.9); } 60% { transform: translateY(-6px) scale(1.07); } 100% { transform: translateY(-4px) scale(1.03); } }
   .cword.shake { animation: cshake .44s var(--ease-soft); }
   @keyframes cshake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
   .cword.bump { animation: cbump .36s var(--ease); }
@@ -71,7 +73,7 @@
     grid-column: 1 / -1; border-radius: 6px; padding: 12px 15px;
     text-align: center; color: #fff; animation: solveIn .46s var(--ease);
   }
-  @keyframes solveIn { from { opacity: 0; transform: scale(.95); } to { opacity: 1; transform: none; } }
+  @keyframes solveIn { 0% { opacity: 0; transform: scaleX(.6) scaleY(1.5); } 55% { opacity: 1; transform: scaleX(1.04) scaleY(.94); } 100% { opacity: 1; transform: none; } }
   .solved .cat { font-size: .71rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; opacity: .92; }
   .solved .ws { font-size: .9rem; font-weight: 650; margin-top: 2px; }
   .lives { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 15px; }
@@ -323,6 +325,7 @@
 
   async function win() {
     over = true;
+    if (BB.fx) BB.fx.banner(document.getElementById('grid') || document.querySelector('.board-area'), mistakes === 0 ? 'Perfect' : 'Solved', { tone: mistakes === 0 ? 'gold' : 'win', sub: mistakes === 0 ? 'No mistakes' : mistakes + ' mistake' + (mistakes === 1 ? '' : 's') });
     if (BB.fx) setTimeout(function () { BB.fx.confetti({ colors: COLORS.concat(['#ffffff']) }); }, 500);
     store.wins++; store.played++;
     if (mistakes === 0) store.perfect++;
@@ -353,6 +356,7 @@
 
   function lose() {
     over = true;
+    if (BB.fx) BB.fx.banner(document.querySelector('.board-area'), 'Out of mistakes', { tone: 'lose', shake: 9 });
     store.played++;
     BB.lsSet('bb_conn', store);
     BB.setStat('st-played', store.played);

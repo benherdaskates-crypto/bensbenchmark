@@ -34,8 +34,9 @@
     font-size: 1.45rem; font-weight: 700;
     border-bottom: 3px solid var(--border-mid); transition: border-color .3s;
   }
-  .slot span { display: inline-block; animation: dropIn .3s var(--ease); }
-  @keyframes dropIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+  .slot span { display: inline-block; animation: dropIn .5s cubic-bezier(.3,1.7,.5,1); }
+  @keyframes dropIn { 0% { opacity: 0; transform: translateY(-26px) rotateX(90deg) scale(1.4); } 60% { opacity: 1; transform: translateY(3px) scale(1.12); } 100% { transform: none; } }
+  .gallows .part.show { filter: drop-shadow(0 0 6px rgba(229,72,77,.55)); }
   .slot.miss { border-color: var(--bad); }
   .slot.miss span { color: var(--bad); }
 </style>
@@ -254,6 +255,7 @@
 
   async function end(won) {
     over = true;
+    if (BB.fx) BB.fx.banner(document.querySelector('.board-area'), won ? 'Saved' : 'Hanged', { tone: won ? 'win' : 'lose', sub: won ? (MAX_WRONG - wrong) + ' to spare' : 'It was ' + word.toUpperCase(), shake: won ? 0 : 10 });
     store.played++;
     if (won) { store.won++; store.streak++; } else { store.streak = 0; }
     BB.lsSet('bb_hangman', store);

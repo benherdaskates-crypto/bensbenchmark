@@ -23,7 +23,7 @@
 
   /* Wordle-style tiles. Letters carry the contrast, so each fill has a partner. */
   --green: #50814b;  --on-green: #ffffff;
-  --yellow: #c9b458; --on-yellow: #11130c;
+  --yellow: #c9b458; --on-yellow: #ffffff;
   --grey: #3a3a40;   --on-grey: #ffffff;
   --key-used: #0e0e11; --key-used-text: #5c5c66;
 
@@ -847,3 +847,42 @@ textarea.input { resize: vertical; min-height: 110px; }
 .dist-n { font-size: .75rem; color: var(--muted); margin-top: 4px; }
 .dist-q { font-weight: 700; font-size: .88rem; margin-top: 14px; }
 .dist-you { font-size: .8rem; color: var(--muted); }
+
+/* ============================================================
+   Game polish: richer boards, stats and keys, shared by every game
+   ============================================================ */
+.board-area {
+  position: relative; isolation: isolate; overflow: hidden;
+  background:
+    radial-gradient(130% 70% at 50% -10%, color-mix(in srgb, var(--tile, var(--pop)) 13%, transparent), transparent 62%),
+    var(--surface);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.05);
+  animation: boardIn .7s var(--spring) both;
+}
+.board-area::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
+  background-image: radial-gradient(color-mix(in srgb, var(--text) 9%, transparent) 1px, transparent 1.2px);
+  background-size: 18px 18px;
+  -webkit-mask: radial-gradient(90% 70% at 50% 0%, #000, transparent 75%); mask: radial-gradient(90% 70% at 50% 0%, #000, transparent 75%);
+}
+@keyframes boardIn { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+.stat-box { position: relative; overflow: hidden; }
+.stat-box::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; opacity: .0;
+  background: linear-gradient(90deg, transparent, var(--tile, var(--pop)), transparent); transition: opacity .4s var(--ease); }
+.stat-box.hl::after, .stat-box:hover::after { opacity: .9; }
+.stat-box.hl .v { color: color-mix(in srgb, var(--tile, var(--pop)) 70%, var(--text)); }
+.game-head .glyph { box-shadow: 0 0 0 1px color-mix(in srgb, var(--tile) 40%, transparent), 0 8px 26px color-mix(in srgb, var(--tile) 35%, transparent); }
+/* keys get a little depth and a real press */
+.key { box-shadow: inset 0 -3px 0 rgba(0,0,0,.28), 0 1px 0 rgba(255,255,255,.04); }
+.key:active, .key.press { transform: translateY(2px) scale(.94); box-shadow: inset 0 -1px 0 rgba(0,0,0,.28); }
+.key.correct, .key.present { text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.key.correct { box-shadow: inset 0 -3px 0 rgba(0,0,0,.25), 0 0 14px color-mix(in srgb, var(--green) 40%, transparent); }
+/* letters stay white and crisp on coloured tiles */
+.tile.correct, .tile.present, .pv-tile { text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+
+/* the slam banner (BB.fx.banner), the same drama as chess checkmate */
+.fx-banner { position: fixed; z-index: 9996; pointer-events: none; text-align: center; transform: translate(-50%, -50%);
+  font-family: var(--font-display); font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: #fff; white-space: nowrap;
+  padding: .28em .5em; box-sizing: border-box; overflow: hidden; text-shadow: 0 4px 18px rgba(0,0,0,.45);
+  background: linear-gradient(90deg, transparent, var(--fxb) 14%, var(--fxb) 86%, transparent); }
+.fx-banner small { display: block; font-size: .36em; letter-spacing: .2em; opacity: .85; margin-top: .25em; font-weight: 700; }

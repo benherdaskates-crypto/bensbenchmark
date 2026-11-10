@@ -153,6 +153,7 @@
 
   async function end() {
     over = true;
+    if (BB.fx) BB.fx.banner(stage, 'Out of lives', { tone: 'lose', sub: score + ' word' + (score === 1 ? '' : 's'), shake: 10 });
     var res = await BB.finish(KEY, score, { seen: seen.size });
     BB.setStat('st-best', BB.bestFor(KEY));
     stage.innerHTML = '<div>' +

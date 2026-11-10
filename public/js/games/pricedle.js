@@ -199,6 +199,7 @@
           over = true;
           input.disabled = true; $('pd-go').disabled = true;
           reveal(won);
+          if (fx.banner) fx.banner(root.querySelector('.pd'), won ? 'Spot on' : 'Out of guesses', { tone: won ? 'gold' : 'lose', sub: 'It was ' + money(price), shake: won ? 0 : 8 });
           setTimeout(() => stamp(won), 700);
           if (!won) root.querySelector('.pd-prod').classList.add('out');
           $('pd-msg').textContent = won

@@ -49,7 +49,8 @@
     border-radius: 50%;
     background: var(--surface);
   }
-  @keyframes tIn { from { transform: scale(.35); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes tIn { 0% { transform: scale(.2) rotate(-90deg); opacity: 0; } 65% { transform: scale(1.18) rotate(8deg); opacity: 1; } 100% { transform: none; opacity: 1; } }
+  .target { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tile) 25%, transparent), 0 0 26px color-mix(in srgb, var(--tile) 55%, transparent); }
   .target.pop { animation: tPop .22s var(--ease) forwards; pointer-events: none; }
   @keyframes tPop { to { transform: scale(1.8); opacity: 0; } }
   .arena-msg {
@@ -144,6 +145,7 @@
     var total = performance.now() - startTime;
     var avg = Math.round(total / (TARGETS - 1));
     running = false;
+    if (BB.fx) BB.fx.banner(document.querySelector('.board-area'), avg + ' ms', { tone: avg < 380 ? 'gold' : avg < 520 ? 'win' : 'info', sub: 'per target' });
     var res = await BB.finish(KEY, avg, { misses: misses });
     BB.setStat('st-best', BB.bestFor(KEY) + ' ms');
 

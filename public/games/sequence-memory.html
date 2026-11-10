@@ -237,6 +237,7 @@
 
   async function end() {
     var score = level - 1;
+    if (BB.fx) BB.fx.banner(gridEl, 'Game over', { tone: 'lose', sub: 'Level ' + level, shake: 10 });
     note.textContent = 'Wrong tile. You reached level ' + level + '.';
     var res = await BB.finish(KEY, score, {});
     BB.setStat('st-best', BB.bestFor(KEY));

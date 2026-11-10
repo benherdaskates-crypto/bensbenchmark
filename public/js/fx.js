@@ -211,6 +211,36 @@
     ], { duration: opts.duration || 420, delay: i * (opts.gap || 55), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }));
   };
 
+  /* A banner that slams across a board, like checkmate in chess.
+     tone: win (green), lose (red), gold, info (the game's colour). */
+  const TONES = { win: 'rgba(44, 130, 70, .94)', lose: 'rgba(170, 24, 24, .93)', gold: 'rgba(196, 140, 30, .95)', info: 'rgba(60, 80, 160, .93)' };
+  fx.banner = function (target, text, opts) {
+    if (!on()) return;
+    opts = opts || {};
+    const r = target && target.getBoundingClientRect ? target.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+    const el = document.createElement('div');
+    el.className = 'fx-banner';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = String(text).replace(/</g, '&lt;') + (opts.sub ? '<small>' + String(opts.sub).replace(/</g, '&lt;') + '</small>' : '');
+    const w = Math.min(innerWidth - 8, Math.max(r.width * 1.12, 300, String(text).length * 30));
+    el.style.cssText += `;left:${r.left + r.width / 2}px;top:${r.top + r.height * (opts.at || 0.5)}px;width:${w}px;` +
+      `font-size:${Math.max(22, Math.min(72, (w * 0.86) / (String(text).length * 0.74 + 1)))}px;--fxb:${TONES[opts.tone] || opts.tone || TONES.info}`;
+    document.body.appendChild(el);
+    const hold = opts.hold || 1300;
+    // Easing per step, so the middle really holds still: slam in, hold, snap away.
+    const total = hold + 700, inEnd = 380 / total, outStart = 1 - 260 / total;
+    el.animate([
+      { transform: 'translate(-50%,-50%) scaleX(0) scaleY(2.2)', opacity: 0, easing: 'cubic-bezier(.2,1.5,.4,1)' },
+      { transform: 'translate(-50%,-50%) scaleX(1.07) scaleY(.9)', opacity: 1, offset: inEnd * 0.65, easing: 'ease-out' },
+      { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: inEnd },
+      { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: outStart, easing: 'cubic-bezier(.6,0,.9,.4)' },
+      { transform: 'translate(-50%,-50%) scaleX(1.15) scaleY(0)', opacity: 0 },
+    ], { duration: total }).onfinish = () => el.remove();
+    if (opts.shake && target && target.animate) fx.shake(target, opts.shake === true ? 10 : opts.shake);
+    if (opts.tone === 'win' || opts.tone === 'gold') fx.flash(opts.tone === 'gold' ? '#ffd23f' : '#6ad08a', 0.22);
+    if (opts.tone === 'lose') fx.flash('#ff3030', 0.25);
+  };
+
   /* ---------- the basics for every game, via the sound effects ---------- */
   let last = null;
   document.addEventListener('pointerdown', (e) => { last = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);

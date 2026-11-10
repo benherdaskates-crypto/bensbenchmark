@@ -475,7 +475,7 @@
 
       function penalty(kind, at) {
         ball = at;
-        if (kind === 'water') puff(at, 'water');
+        if (kind === 'water') { puff(at, 'water'); if (BB.fx) BB.fx.banner($('gr-stage'), 'Splash', { tone: '#2a6fb0', hold: 650 }); }
         else if (BB.fx) BB.fx.shake($('gr-stage'), 6);
         BB.sfx[kind === 'water' ? 'splash' : 'bad']();
         strokes++;
@@ -535,6 +535,7 @@
         BB.sfx[strokes <= h.par ? 'cup' : 'pop']();
         const diff = strokes - h.par;
         if (msg !== 'Picked up') puff(h.cup, 'cup');
+        if (BB.fx && msg !== 'Picked up' && (diff <= -1 || strokes === 1)) BB.fx.banner($('gr-stage'), strokes === 1 ? 'Hole in one' : scoreName(diff, strokes), { tone: 'gold', hold: 1100 });
         if (BB.fx && diff <= -1 && msg !== 'Picked up') {
           BB.fx.confetti({ colors: ['#ffd23f', '#7dca6f', '#ffffff', '#4c9a46'], count: diff <= -2 || strokes === 1 ? 220 : 110 });
           if (strokes === 1) BB.fx.flash('#ffd23f', 0.35);
@@ -570,6 +571,7 @@
           <tr><td>You</td>${card.map((s, i) => `<td class="${s < course[i].par ? 'u' : s > course[i].par ? 'o' : ''}" style="animation-delay:${300 + i * 90}ms">${s}</td>`).join('')}</tr></table></div>`;
         $('gr-stage').appendChild(overlay);
         if (BB.fx && total <= par) setTimeout(() => BB.fx.confetti({ colors: ['#ffd23f', '#7dca6f', '#ffffff', '#4c9a46'] }), 500);
+        if (BB.fx) BB.fx.banner($('gr-stage'), 'Round complete', { tone: total <= par ? 'gold' : 'info', sub: total + ' strokes, ' + toPar(total - par), at: 0.25 });
         if (hooks.progress) hooks.progress(100);
         setTimeout(() => hooks.finish && hooks.finish(total, { card, par }), 700);
       }
