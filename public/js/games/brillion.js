@@ -8,7 +8,7 @@
   'use strict';
   window.BBG = window.BBG || {};
 
-  const ROUNDS = 7, SECONDS = 25;
+  const ROUNDS = 7, SECONDS = 45;
   const TIERS = [
     { upTo: 0.15, pts: 10,  name: 'Shallows',          color: '#5bc0eb' },
     { upTo: 0.35, pts: 30,  name: 'Reef',              color: '#2fb3a1' },
@@ -322,9 +322,9 @@
     TIERS,
     // Wrong answers never cost time; the levels change the clock and the help.
     levels: {
-      normal: { label: 'Normal', seconds: SECONDS, help: true, floor: 0, note: '25 seconds, spelling help on' },
-      hard:   { label: 'Hard',   seconds: 15, help: true, floor: 0, note: '15 seconds a prompt' },
-      expert: { label: 'Expert', seconds: 10, help: false, floor: 10, note: '10 seconds, no spelling help, the most common answers score nothing' },
+      normal: { label: 'Normal', seconds: SECONDS, help: true, floor: 0, note: '45 seconds, spelling help on' },
+      hard:   { label: 'Hard',   seconds: 35, help: true, floor: 0, note: '35 seconds a prompt' },
+      expert: { label: 'Expert', seconds: 30, help: false, floor: 10, note: '30 seconds, no spelling help, the most common answers score nothing' },
     },
     choose(seed) {
       const all = window.BRILLION_PROMPTS.map((_, i) => i);
